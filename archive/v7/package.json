@@ -1,0 +1,11 @@
+{
+  "name": "jiao-tiao-chess",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start:online": "node online-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

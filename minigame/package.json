@@ -1,0 +1,13 @@
+{
+  "name": "jiaotiaoqi-minigame",
+  "version": "1.0.0",
+  "description": "夹挑棋微信小游戏版",
+  "scripts": {
+    "preview": "node upload.js preview",
+    "upload": "node upload.js upload",
+    "upload:patch": "VERSION=1.0.$(date +%s | tail -c 4) node upload.js upload"
+  },
+  "dependencies": {
+    "miniprogram-ci": "^1.9.11"
+  }
+}

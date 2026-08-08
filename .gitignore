@@ -1,0 +1,28 @@
+# 依赖
+node_modules/
+
+# 构建产物
+release/
+dist/
+
+# 机密（私钥、AppID 实际值）
+minigame/private.config.js
+*.key
+
+# 上传/预览临时文件
+preview.jpg
+preview.png
+
+# IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# 环境文件
+.env
+.env.local

@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>夹挑棋</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: #2b2b2b;
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            color: #eee;
+            user-select: none;
+        }
+        h1 {
+            font-size: 36px;
+            margin-bottom: 6px;
+            letter-spacing: 6px;
+            color: #f0d060;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        }
+        .score-bar {
+            display: flex;
+            gap: 36px;
+            margin-bottom: 6px;
+            font-size: 18px;
+        }
+        .score-bar .side {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 16px;
+            border-radius: 6px;
+            transition: background 0.3s;
+        }
+        .score-bar .side.active {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .dot {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+        .dot.black { background: #333; border: 2px solid #666; }
+        .dot.white { background: #eee; border: 2px solid #aaa; }
+        #status {
+            font-size: 20px;
+            margin-bottom: 10px;
+            height: 32px;
+            line-height: 32px;
+            color: #ccc;
+        }
+        #gameCanvas {
+            cursor: pointer;
+            border-radius: 10px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+        }
+        .btn-row {
+            margin-top: 14px;
+            display: flex;
+            gap: 16px;
+        }
+        .btn-row button {
+            padding: 10px 28px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .btn-row button:active { transform: scale(0.96); }
+        #restartBtn { background: #4CAF50; color: #fff; }
+        #restartBtn:hover { background: #43a047; }
+        #surrenderBtn { background: #e53935; color: #fff; }
+        #surrenderBtn:hover { background: #c62828; }
+        /* Result Panel */
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 18px;
+            right: 18px;
+            z-index: 100;
+        }
+        #overlay.show { display: block; }
+        .modal {
+            background: rgba(45,45,45,0.95);
+            padding: 16px 18px;
+            border-radius: 10px;
+            text-align: left;
+            min-width: 260px;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+            border: 1px solid rgba(255,255,255,0.16);
+        }
+        .modal h2 {
+            font-size: 20px;
+            margin-bottom: 12px;
+            color: #f0d060;
+        }
+        .modal button {
+            padding: 8px 16px;
+            font-size: 14px;
+            background: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+        }
+        .modal button:hover { background: #43a047; }
+    </style>
+</head>
+<body>
+
+<h1>夹 挑 棋</h1>
+
+<div class="score-bar">
+    <div class="side" id="blackSide">
+        <i class="dot black"></i>
+        <span>黑方: <b id="blackCount">5</b></span>
+    </div>
+    <div class="side" id="whiteSide">
+        <i class="dot white"></i>
+        <span>白方: <b id="whiteCount">5</b></span>
+    </div>
+</div>
+
+<div id="status">黑方走棋</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div class="btn-row">
+    <button id="restartBtn">重新开始</button>
+    <button id="surrenderBtn">认 输</button>
+</div>
+
+<div id="overlay">
+    <div class="modal">
+        <h2 id="modalTitle"></h2>
+        <button id="playAgainBtn">再来一局</button>
+    </div>
+</div>
+
+<script>
+// ========== Constants ==========
+const EMPTY = 0, BLACK = 1, WHITE = 2;
+const GRID = 5;
+const CELL = 100;
+const PAD = 50;
+const RADIUS = 22;
+const CANVAS_CSS = PAD * 2 + (GRID - 1) * CELL; // 500
+const ANIM_STEP_START_DELAY = 260;
+const ANIM_FLASH_COUNT = 6;
+const ANIM_FLASH_INTERVAL = 200;
+const ANIM_CONVERT_HOLD = 520;
+const ANIM_STEP_GAP = 360;
+
+// ========== DOM ==========
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const blackCountEl = document.getElementById('blackCount');
+const whiteCountEl = document.getElementById('whiteCount');
+const blackSideEl = document.getElementById('blackSide');
+const whiteSideEl = document.getElementById('whiteSide');
+const overlayEl = document.getElementById('overlay');
+const modalTitleEl = document.getElementById('modalTitle');
+
+// Hi-DPI
+const dpr = window.devicePixelRatio || 1;
+canvas.width = CANVAS_CSS * dpr;
+canvas.height = CANVAS_CSS * dpr;
+canvas.style.width = CANVAS_CSS + 'px';
+canvas.style.height = CANVAS_CSS + 'px';
+ctx.scale(dpr, dpr);
+
+// ========== Lines (game coords: y=0 bottom, y=4 top) ==========
+const allLines = [];
+const ptLines = {}; // "x,y" -> [{li, pi}]
+
+function buildLines() {
+    allLines.length = 0;
+    for (const k in ptLines) delete ptLines[k];
+
+    // Horizontal (5)
+    for (let y = 0; y < GRID; y++) {
+        const line = [];
+        for (let x = 0; x < GRID; x++) line.push([x, y]);
+        allLines.push(line);
+    }
+    // Vertical (5)
+    for (let x = 0; x < GRID; x++) {
+        const line = [];
+        for (let y = 0; y < GRID; y++) line.push([x, y]);
+        allLines.push(line);
+    }
+    // Diagonal '\' in game coords (x+, y-)
+    allLines.push([[0,4],[1,3],[2,2],[3,1],[4,0]]);
+    allLines.push([[0,2],[1,1],[2,0]]);
+    allLines.push([[2,4],[3,3],[4,2]]);
+    // Diagonal '/' in game coords (x+, y+)
+    allLines.push([[0,0],[1,1],[2,2],[3,3],[4,4]]);
+    allLines.push([[0,2],[1,3],[2,4]]);
+    allLines.push([[2,0],[3,1],[4,2]]);
+
+    for (let li = 0; li < allLines.length; li++) {
+        const line = allLines[li];
+        for (let pi = 0; pi < line.length; pi++) {
+            const k = line[pi][0] + ',' + line[pi][1];
+            if (!ptLines[k]) ptLines[k] = [];
+            ptLines[k].push({ li, pi });
+        }
+    }
+}
+
+// ========== State ==========
+let board, curPlayer, selPiece, validMoves, lastMove, gameOver;
+let isAnimating = false;
+let animCapture = null;
+
+function resetBoard() {
+    board = Array.from({ length: GRID }, () => Array(GRID).fill(EMPTY));
+    for (let x = 0; x < GRID; x++) board[x][0] = BLACK;
+    for (let x = 0; x < GRID; x++) board[x][4] = WHITE;
+    curPlayer = BLACK;
+    selPiece = null;
+    validMoves = [];
+    lastMove = null;
+    gameOver = false;
+    isAnimating = false;
+    animCapture = null;
+    overlayEl.classList.remove('show');
+    updatePieceCounts();
+    updateUI();
+    draw();
+}
+
+// ========== Coord conversion ==========
+function g2s(gx, gy) {
+    return [PAD + gx * CELL, PAD + (4 - gy) * CELL];
+}
+
+function s2g(sx, sy) {
+    const gx = Math.round((sx - PAD) / CELL);
+    const gy = Math.round(4 - (sy - PAD) / CELL);
+    if (gx < 0 || gx >= GRID || gy < 0 || gy >= GRID) return null;
+    const [cx, cy] = g2s(gx, gy);
+    if (Math.hypot(sx - cx, sy - cy) > CELL * 0.42) return null;
+    return [gx, gy];
+}
+
+// ========== Game logic ==========
+
+function getValidMoves(x, y) {
+    const moves = [];
+    const entries = ptLines[x + ',' + y] || [];
+    for (const { li, pi } of entries) {
+        const line = allLines[li];
+        for (let i = pi + 1; i < line.length; i++) {
+            if (board[line[i][0]][line[i][1]] !== EMPTY) break;
+            moves.push(line[i]);
+        }
+        for (let i = pi - 1; i >= 0; i--) {
+            if (board[line[i][0]][line[i][1]] !== EMPTY) break;
+            moves.push(line[i]);
+        }
+    }
+    return moves;
+}
+
+function findCaptures(x, y, player) {
+    const enemy = player === BLACK ? WHITE : BLACK;
+    const caps = [];
+    const entries = ptLines[x + ',' + y] || [];
+
+    for (const { li, pi } of entries) {
+        const L = allLines[li];
+
+        // 夹 (+1): me(pi) - enemy(pi+1) - me(pi+2)
+        if (pi + 2 < L.length) {
+            const [ax, ay] = L[pi + 1];
+            const [bx, by] = L[pi + 2];
+            if (board[ax][ay] === enemy && board[bx][by] === player) {
+                caps.push([ax, ay]);
+            }
+        }
+        // 夹 (-1): me(pi) - enemy(pi-1) - me(pi-2)
+        if (pi - 2 >= 0) {
+            const [ax, ay] = L[pi - 1];
+            const [bx, by] = L[pi - 2];
+            if (board[ax][ay] === enemy && board[bx][by] === player) {
+                caps.push([ax, ay]);
+            }
+        }
+        // 挑: enemy(pi-1) - me(pi) - enemy(pi+1)
+        if (pi - 1 >= 0 && pi + 1 < L.length) {
+            const [ax, ay] = L[pi - 1];
+            const [bx, by] = L[pi + 1];
+            if (board[ax][ay] === enemy && board[bx][by] === enemy) {
+                caps.push([ax, ay], [bx, by]);
+            }
+        }
+    }
+
+    // Deduplicate
+    const seen = new Set();
+    return caps.filter(([cx, cy]) => {
+        const k = cx * GRID + cy;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+    });
+}
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function updatePieceCounts() {
+    let bc = 0, wc = 0;
+    for (let x = 0; x < GRID; x++) {
+        for (let y = 0; y < GRID; y++) {
+            if (board[x][y] === BLACK) bc++;
+            if (board[x][y] === WHITE) wc++;
+        }
+    }
+    blackCountEl.textContent = bc;
+    whiteCountEl.textContent = wc;
+    return { bc, wc };
+}
+
+function getAnimTarget(x, y) {
+    if (!animCapture) return null;
+    return animCapture.targets.some(([tx, ty]) => tx === x && ty === y) ? animCapture : null;
+}
+
+async function playCaptureStep(targets, player, stepNo) {
+    if (targets.length === 0) return;
+
+    statusEl.textContent = `连锁第${stepNo}步：即将吃子 ${targets.length} 枚`;
+    draw();
+    await sleep(ANIM_STEP_START_DELAY);
+
+    for (let i = 0; i < ANIM_FLASH_COUNT; i++) {
+        animCapture = {
+            type: 'gray-flash',
+            stepNo,
+            targets,
+            grayOn: i % 2 === 0
+        };
+        statusEl.textContent = `连锁第${stepNo}步：吃子 ${targets.length} 枚`;
+        draw();
+        await sleep(ANIM_FLASH_INTERVAL);
+    }
+
+    for (const [cx, cy] of targets) {
+        board[cx][cy] = player;
+    }
+    updatePieceCounts();
+
+    animCapture = {
+        type: 'converted',
+        stepNo,
+        targets,
+        grayOn: false
+    };
+    statusEl.textContent = `连锁第${stepNo}步：已转换 ${targets.length} 枚`;
+    draw();
+    await sleep(ANIM_CONVERT_HOLD);
+
+    animCapture = null;
+    draw();
+    await sleep(ANIM_STEP_GAP);
+}
+
+async function doMove(fx, fy, tx, ty) {
+    const player = board[fx][fy];
+    board[fx][fy] = EMPTY;
+    board[tx][ty] = player;
+    lastMove = { fx, fy, tx, ty };
+    draw();
+    await sleep(120);
+
+    // Capture chain reaction (BFS, step-by-step)
+    let queue = [[tx, ty]];
+    let stepNo = 1;
+    while (queue.length > 0) {
+        const seen = new Set();
+        const next = [];
+        for (const [qx, qy] of queue) {
+            const caps = findCaptures(qx, qy, player);
+            for (const [cx, cy] of caps) {
+                const key = cx * GRID + cy;
+                if (board[cx][cy] !== player && !seen.has(key)) {
+                    seen.add(key);
+                    next.push([cx, cy]);
+                }
+            }
+        }
+        await playCaptureStep(next, player, stepNo);
+        queue = next;
+        stepNo++;
+    }
+
+    const { bc, wc } = updatePieceCounts();
+
+    if (bc === 0) { endGame('白方获胜！'); return; }
+    if (wc === 0) { endGame('黑方获胜！'); return; }
+
+    curPlayer = curPlayer === BLACK ? WHITE : BLACK;
+    selPiece = null;
+    validMoves = [];
+
+    // Check if current player can move
+    if (!hasAnyMove(curPlayer)) {
+        endGame((curPlayer === BLACK ? '黑方' : '白方') + '无棋可走，' +
+                (curPlayer === BLACK ? '白方' : '黑方') + '获胜！');
+        return;
+    }
+
+    updateUI();
+}
+
+function hasAnyMove(player) {
+    for (let x = 0; x < GRID; x++)
+        for (let y = 0; y < GRID; y++)
+            if (board[x][y] === player && getValidMoves(x, y).length > 0)
+                return true;
+    return false;
+}
+
+function endGame(msg) {
+    gameOver = true;
+    modalTitleEl.textContent = msg;
+    overlayEl.classList.add('show');
+    updateUI();
+}
+
+function updateUI() {
+    if (gameOver) {
+        statusEl.textContent = '游戏结束';
+    } else if (isAnimating) {
+        return;
+    } else {
+        statusEl.textContent = (curPlayer === BLACK ? '黑方' : '白方') + '走棋';
+    }
+    blackSideEl.classList.toggle('active', curPlayer === BLACK && !gameOver);
+    whiteSideEl.classList.toggle('active', curPlayer === WHITE && !gameOver);
+}
+
+// ========== Rendering ==========
+
+let hoverPt = null;
+
+function draw() {
+    const W = CANVAS_CSS, H = CANVAS_CSS;
+
+    // Background
+    ctx.fillStyle = '#dcb35c';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle wood grain effect
+    ctx.fillStyle = 'rgba(180, 140, 60, 0.15)';
+    for (let i = 0; i < W; i += 6) {
+        ctx.fillRect(i, 0, 2, H);
+    }
+
+    ctx.strokeStyle = '#5a4a2a';
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+
+    // Horizontal lines
+    for (let y = 0; y < GRID; y++) {
+        const [x1, y1] = g2s(0, y);
+        const [x2, y2] = g2s(4, y);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+    // Vertical lines
+    for (let x = 0; x < GRID; x++) {
+        const [x1, y1] = g2s(x, 0);
+        const [x2, y2] = g2s(x, 4);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+    // Diagonal lines (per cell)
+    for (let cx = 0; cx < 4; cx++) {
+        for (let cy = 0; cy < 4; cy++) {
+            let sx1, sy1, sx2, sy2;
+            if ((cx + cy) % 2 === 0) {
+                // '/' in game coords: bottom-left to top-right
+                [sx1, sy1] = g2s(cx, cy);
+                [sx2, sy2] = g2s(cx + 1, cy + 1);
+            } else {
+                // '\' in game coords: top-left to bottom-right
+                [sx1, sy1] = g2s(cx, cy + 1);
+                [sx2, sy2] = g2s(cx + 1, cy);
+            }
+            ctx.beginPath(); ctx.moveTo(sx1, sy1); ctx.lineTo(sx2, sy2); ctx.stroke();
+        }
+    }
+
+    // Small dots at empty intersections
+    for (let x = 0; x < GRID; x++) {
+        for (let y = 0; y < GRID; y++) {
+            if (board[x][y] !== EMPTY) continue;
+            const [sx, sy] = g2s(x, y);
+            ctx.beginPath();
+            ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#6b5b3a';
+            ctx.fill();
+        }
+    }
+
+    // Valid move indicators
+    for (const [mx, my] of validMoves) {
+        const [sx, sy] = g2s(mx, my);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 12, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(76, 175, 80, 0.45)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(76, 175, 80, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    // Hover highlight
+    if (hoverPt && !gameOver) {
+        const [hx, hy] = hoverPt;
+        const [sx, sy] = g2s(hx, hy);
+        if (board[hx][hy] === curPlayer) {
+            // Hovering own piece
+            ctx.beginPath();
+            ctx.arc(sx, sy, RADIUS + 6, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 200, 0, 0.35)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        } else if (board[hx][hy] === EMPTY && validMoves.some(([vx, vy]) => vx === hx && vy === hy)) {
+            // Hovering valid target
+            ctx.beginPath();
+            ctx.arc(sx, sy, 14, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.7)';
+            ctx.fill();
+        }
+    }
+
+    // Pieces
+    for (let x = 0; x < GRID; x++) {
+        for (let y = 0; y < GRID; y++) {
+            if (board[x][y] === EMPTY) continue;
+            const [sx, sy] = g2s(x, y);
+            const piece = board[x][y];
+            const anim = getAnimTarget(x, y);
+
+            ctx.beginPath();
+            ctx.arc(sx, sy, RADIUS, 0, Math.PI * 2);
+
+            if (anim && anim.type === 'gray-flash' && anim.grayOn) {
+                const grad = ctx.createRadialGradient(sx - 5, sy - 5, 2, sx, sy, RADIUS);
+                grad.addColorStop(0, '#b5b5b5');
+                grad.addColorStop(1, '#6e6e6e');
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.strokeStyle = '#555';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            } else if (piece === BLACK) {
+                // Black piece with gradient
+                const grad = ctx.createRadialGradient(sx - 5, sy - 5, 2, sx, sy, RADIUS);
+                grad.addColorStop(0, '#555');
+                grad.addColorStop(1, '#111');
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            } else {
+                // White piece with gradient
+                const grad = ctx.createRadialGradient(sx - 5, sy - 5, 2, sx, sy, RADIUS);
+                grad.addColorStop(0, '#fff');
+                grad.addColorStop(1, '#ccc');
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.strokeStyle = '#888';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            if (anim && anim.type === 'converted') {
+                ctx.beginPath();
+                ctx.arc(sx, sy, RADIUS + 4, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255, 215, 0, 0.85)';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+
+            // Last move marker
+            if (lastMove && lastMove.tx === x && lastMove.ty === y) {
+                ctx.beginPath();
+                ctx.arc(sx, sy, 5, 0, Math.PI * 2);
+                ctx.fillStyle = '#e53935';
+                ctx.fill();
+            }
+        }
+    }
+
+    // Selection ring
+    if (selPiece) {
+        const [sx, sy] = g2s(selPiece[0], selPiece[1]);
+        ctx.beginPath();
+        ctx.arc(sx, sy, RADIUS + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ff9800';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
+}
+
+// ========== Event Handlers ==========
+
+canvas.addEventListener('click', async (e) => {
+    if (gameOver || isAnimating) return;
+    const rect = canvas.getBoundingClientRect();
+    const sx = (e.clientX - rect.left) * (CANVAS_CSS / rect.width);
+    const sy = (e.clientY - rect.top) * (CANVAS_CSS / rect.height);
+    const pt = s2g(sx, sy);
+    if (!pt) return;
+    const [gx, gy] = pt;
+
+    if (selPiece) {
+        // Check if clicking a valid move target
+        if (validMoves.some(([vx, vy]) => vx === gx && vy === gy)) {
+            isAnimating = true;
+            await doMove(selPiece[0], selPiece[1], gx, gy);
+            isAnimating = false;
+            if (!gameOver) updateUI();
+            draw();
+            return;
+        }
+        // Click on another own piece → switch selection
+        if (board[gx][gy] === curPlayer) {
+            selPiece = [gx, gy];
+            validMoves = getValidMoves(gx, gy);
+            draw();
+            return;
+        }
+        // Click elsewhere → deselect
+        selPiece = null;
+        validMoves = [];
+        draw();
+        return;
+    }
+
+    // No selection yet → select own piece
+    if (board[gx][gy] === curPlayer) {
+        selPiece = [gx, gy];
+        validMoves = getValidMoves(gx, gy);
+        draw();
+    }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = (e.clientX - rect.left) * (CANVAS_CSS / rect.width);
+    const sy = (e.clientY - rect.top) * (CANVAS_CSS / rect.height);
+    const pt = s2g(sx, sy);
+    const prev = hoverPt;
+    hoverPt = pt;
+    // Only redraw if hover point changed
+    if (!prev && !pt) return;
+    if (prev && pt && prev[0] === pt[0] && prev[1] === pt[1]) return;
+    draw();
+});
+
+canvas.addEventListener('mouseleave', () => {
+    if (hoverPt) { hoverPt = null; draw(); }
+});
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+    resetBoard();
+});
+
+document.getElementById('surrenderBtn').addEventListener('click', () => {
+    if (gameOver || isAnimating) return;
+    const winner = curPlayer === BLACK ? '白方' : '黑方';
+    endGame((curPlayer === BLACK ? '黑方' : '白方') + '认输，' + winner + '获胜！');
+    draw();
+});
+
+document.getElementById('playAgainBtn').addEventListener('click', () => {
+    resetBoard();
+});
+
+// ========== Init ==========
+buildLines();
+resetBoard();
+</script>
+
+</body>
+</html>

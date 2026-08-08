@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>夹挑棋 · 霓虹赛博</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  display:flex;justify-content:center;align-items:center;
+  min-height:100vh;background:#020010;
+  font-family:'Courier New','PingFang SC','Microsoft YaHei',monospace;
+  overflow:hidden;
+}
+canvas{display:block;cursor:pointer}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+// ═══════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════
+const EMPTY=0, BLACK=1, WHITE=2, GRID=5;
+const P = {
+  bg:    '#020010',
+  cyan:  '#00e5ff',
+  cya2:  '#008899',
+  magenta:'#ff2d95',
+  mag2:  '#991155',
+  gold:  '#ffe800',
+  purp:  '#120025',
+  purp2: '#1a0035',
+  white: '#f8f0ff',
+};
+
+// ═══════════════════════════════════════
+//  BOARD TOPOLOGY
+// ═══════════════════════════════════════
+const allLines=[], ptLines={};
+(function buildLines(){
+  for(let y=0;y<GRID;y++){const L=[];for(let x=0;x<GRID;x++)L.push([x,y]);allLines.push(L)}
+  for(let x=0;x<GRID;x++){const L=[];for(let y=0;y<GRID;y++)L.push([x,y]);allLines.push(L)}
+  allLines.push([[0,4],[1,3],[2,2],[3,1],[4,0]]); allLines.push([[0,2],[1,1],[2,0]]); allLines.push([[2,4],[3,3],[4,2]]);
+  allLines.push([[0,0],[1,1],[2,2],[3,3],[4,4]]); allLines.push([[0,2],[1,3],[2,4]]); allLines.push([[2,0],[3,1],[4,2]]);
+  for(let li=0;li<allLines.length;li++){const L=allLines[li];for(let pi=0;pi<L.length;pi++){const k=L[pi][0]+','+L[pi][1];if(!ptLines[k])ptLines[k]=[];ptLines[k].push({li,pi})}}
+})();
+
+// ═══════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════
+let board, curPlayer=BLACK, selPiece=null, validMoves=[], lastMove=null;
+let gameOver=false, isAnimating=false, animCapture=null, winAnim=null;
+let gameMode='ai', aiColor=WHITE, aiThinking=false;
+let modalText='', overlayRect=null;
+
+// ═══════════════════════════════════════
+//  GAME LOGIC (unchanged from original)
+// ═══════════════════════════════════════
+function initBoard(){const b=Array.from({length:GRID},()=>Array(GRID).fill(EMPTY));for(let x=0;x<GRID;x++)b[x][0]=BLACK;for(let x=0;x<GRID;x++)b[x][4]=WHITE;return b}
+function countPieces(b){let bc=0,wc=0;for(let x=0;x<GRID;x++)for(let y=0;y<GRID;y++){if(b[x][y]===BLACK)bc++;if(b[x][y]===WHITE)wc++}return{bc,wc}}
+function getValidMoves(b,x,y){const mv=[];const E=ptLines[x+','+y]||[];for(const{li,pi}of E){const L=allLines[li];for(let i=pi+1;i<L.length;i++){if(b[L[i][0]][L[i][1]]!==EMPTY)break;mv.push(L[i])}for(let i=pi-1;i>=0;i--){if(b[L[i][0]][L[i][1]]!==EMPTY)break;mv.push(L[i])}}return mv}
+function findCapturesOnBoard(bs,x,y,p){const enemy=p===BLACK?WHITE:BLACK;const caps=[];const E=ptLines[x+','+y]||[];for(const{li,pi}of E){const L=allLines[li];if(pi+2<L.length){const[ax,ay]=L[pi+1];const[bx,by]=L[pi+2];if(bs[ax][ay]===enemy&&bs[bx][by]===p)caps.push([ax,ay])}if(pi-2>=0){const[ax,ay]=L[pi-1];const[bx,by]=L[pi-2];if(bs[ax][ay]===enemy&&bs[bx][by]===p)caps.push([ax,ay])}if(pi-1>=0&&pi+1<L.length){const[ax,ay]=L[pi-1];const[bx,by]=L[pi+1];if(bs[ax][ay]===enemy&&bs[bx][by]===enemy)caps.push([ax,ay],[bx,by])}}const seen=new Set;return caps.filter(([cx,cy])=>{const k=cx*GRID+cy;if(seen.has(k))return!1;seen.add(k);return!0})}
+function hasAnyMove(b,p){for(let x=0;x<GRID;x++)for(let y=0;y<GRID;y++)if(b[x][y]===p&&getValidMoves(b,x,y).length>0)return!0;return!1}
+function getAllPossibleMoves(b,p){const mv=[];for(let x=0;x<GRID;x++)for(let y=0;y<GRID;y++)if(b[x][y]===p){const tl=getValidMoves(b,x,y);for(const[tx,ty]of tl)mv.push({fx:x,fy:y,tx,ty})}return mv}
+function estimateCaptureCountAfterMove(b,move,p){const bc=b.map(c=>c.slice());bc[move.fx][move.fy]=EMPTY;bc[move.tx][move.ty]=p;let captured=0;let q=[[move.tx,move.ty]];while(q.length>0){const next=[];const seen=new Set;for(const[qx,qy]of q){const caps=findCapturesOnBoard(bc,qx,qy,p);for(const[cx,cy]of caps){const k=cx*GRID+cy;if(bc[cx][cy]!==p&&!seen.has(k)){seen.add(k);bc[cx][cy]=p;captured++;next.push([cx,cy])}}}q=next}return captured}
+function chooseAiMove(b,p){const moves=getAllPossibleMoves(b,p);if(moves.length===0)return null;const center=2;let bestScore=-Infinity,bestMoves=[];for(const m of moves){const cc=estimateCaptureCountAfterMove(b,m,p);const cd=Math.abs(m.tx-center)+Math.abs(m.ty-center);const prog=p===WHITE?(m.ty<m.fy?1:0):(m.ty>m.fy?1:0);const s=cc*100-cd*2+prog;if(s>bestScore){bestScore=s;bestMoves=[m]}else if(s===bestScore){bestMoves.push(m)}}return bestMoves[Math.floor(Math.random()*bestMoves.length)]}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+
+// ═══════════════════════════════════════
+//  CANVAS & LAYOUT
+// ═══════════════════════════════════════
+const cvs=document.getElementById('c'), ctx=cvs.getContext('2d');
+let CW=380, CH=680;
+const dpr=window.devicePixelRatio||1;
+cvs.width=CW*dpr; cvs.height=CH*dpr; cvs.style.width=CW+'px'; cvs.style.height=CH+'px'; ctx.scale(dpr,dpr);
+
+let cell, pad, boardX, boardY, boardSize, PR; // PR = piece radius
+
+function computeLayout(){
+  const topH=120, bottomH=200;
+  boardSize=Math.max(240, Math.min(CW-36, CH-topH-bottomH));
+  cell=Math.floor(boardSize/(GRID+2)); pad=cell;
+  boardSize=pad*2+(GRID-1)*cell;
+  boardX=Math.floor((CW-boardSize)/2); boardY=topH;
+  PR=Math.max(14, cell*.235);
+}
+computeLayout();
+
+function g2s(gx,gy){return[boardX+pad+gx*cell, boardY+pad+(GRID-1-gy)*cell]}
+function s2g(sx,sy){
+  const gx=Math.round((sx-boardX-pad)/cell), gy=Math.round((GRID-1-(sy-boardY-pad)/cell));
+  if(gx<0||gx>=GRID||gy<0||gy>=GRID)return null;
+  const[cx,cy]=g2s(gx,gy);
+  if(Math.hypot(sx-cx,sy-cy)>cell*.44)return null;
+  return[gx,gy];
+}
+
+// ═══════════════════════════════════════
+//  AUDIO (synth blips)
+// ═══════════════════════════════════════
+function blip(freq,len,type='square',vol=.04){
+  try{
+    const ac=new(window.AudioContext||window.webkitAudioContext)();
+    const o=ac.createOscillator(), g=ac.createGain();
+    o.type=type; o.frequency.value=freq;
+    g.gain.setValueAtTime(vol,ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+len);
+    o.connect(g); g.connect(ac.destination);
+    o.start(); o.stop(ac.currentTime+len);
+  }catch(e){}
+}
+
+// ═══════════════════════════════════════
+//  PARTICLE SYSTEMS
+// ═══════════════════════════════════════
+// --- background stars ---
+let stars=[];
+function initStars(){
+  stars=[];
+  for(let i=0;i<55;i++){
+    stars.push({
+      x:Math.random()*CW, y:Math.random()*CH,
+      r:Math.random()*1.4+.3,
+      v:Math.random()*.25+.08,
+      hue:Math.random()<.5?190:320, // cyan or magenta hue
+      alpha:Math.random()*.4+.1,
+      twinkle:Math.random()*Math.PI*2
+    });
+  }
+}
+initStars();
+
+function updateStars(){
+  for(const s of stars){
+    s.y-=s.v;
+    s.twinkle+=.03;
+    if(s.y<-5){s.y=CH+5; s.x=Math.random()*CW}
+  }
+}
+
+function drawStars(){
+  for(const s of stars){
+    const a=s.alpha*(.6+.4*Math.sin(s.twinkle));
+    ctx.beginPath();
+    ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${s.hue},90%,65%,${a})`;
+    ctx.fill();
+    // tiny glow
+    if(s.r>1){
+      ctx.beginPath();
+      ctx.arc(s.x,s.y,s.r*2.5,0,Math.PI*2);
+      ctx.fillStyle=`hsla(${s.hue},90%,65%,${a*.15})`;
+      ctx.fill();
+    }
+  }
+}
+
+// --- win burst particles ---
+let burstParts=[];
+function spawnBurst(x,y,count,r,g,b){
+  for(let i=0;i<count;i++){
+    const angle=Math.random()*Math.PI*2;
+    const speed=Math.random()*3+1.5;
+    burstParts.push({
+      x,y,
+      vx:Math.cos(angle)*speed,
+      vy:Math.sin(angle)*speed,
+      life:1, decay:.012+Math.random()*.025,
+      radius:Math.random()*2.5+1,
+      cr:r, cg:g, cb:b
+    });
+  }
+}
+
+function updateBurst(){
+  for(let i=burstParts.length-1;i>=0;i--){
+    const p=burstParts[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=.04; // gravity
+    p.life-=p.decay;
+    if(p.life<=0)burstParts.splice(i,1);
+  }
+}
+
+function drawBurst(){
+  for(const p of burstParts){
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.radius,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${p.cr},${p.cg},${p.cb},${p.life})`;
+    ctx.fill();
+    // glow
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.radius*3,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${p.cr},${p.cg},${p.cb},${p.life*.2})`;
+    ctx.fill();
+  }
+}
+
+// ═══════════════════════════════════════
+//  RENDERING HELPERS
+// ═══════════════════════════════════════
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+function glowOn(color,blur){
+  ctx.shadowColor=color; ctx.shadowBlur=blur;
+}
+function glowOff(){
+  ctx.shadowColor='transparent'; ctx.shadowBlur=0;
+}
+
+// ═══════════════════════════════════════
+//  DRAWING FUNCTIONS
+// ═══════════════════════════════════════
+
+function drawTitle(){
+  const y=28;
+  // glow layers behind text
+  ctx.font='bold 32px "Courier New","PingFang SC",monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+
+  // outer glow
+  glowOn(P.cyan,18);
+  ctx.fillStyle=P.cyan; ctx.fillText('夹  挑  棋',CW/2,y);
+  glowOn(P.cyan,8);
+  ctx.fillText('夹  挑  棋',CW/2,y);
+  glowOff();
+  // bright core
+  ctx.fillStyle='#e0fdff'; ctx.fillText('夹  挑  棋',CW/2,y);
+
+  // subtitle
+  ctx.font='11px "Courier New",monospace';
+  ctx.fillStyle=P.cya2;
+  glowOn(P.cyan,4);
+  ctx.fillText('N E O N  ·  C H E S S',CW/2,y+26);
+  glowOff();
+}
+
+function drawBoardPanel(){
+  // outer glow border
+  glowOn(P.cyan,14);
+  roundRect(boardX-6,boardY-6,boardSize+12,boardSize+12,4);
+  ctx.strokeStyle='rgba(0,229,255,.35)'; ctx.lineWidth=2; ctx.stroke();
+  glowOff();
+
+  // panel fill
+  roundRect(boardX-4,boardY-4,boardSize+8,boardSize+8,3);
+  const bgGrad=ctx.createLinearGradient(boardX,boardY,boardX,boardY+boardSize);
+  bgGrad.addColorStop(0,'rgba(10,2,30,.88)');
+  bgGrad.addColorStop(.5,'rgba(18,4,42,.90)');
+  bgGrad.addColorStop(1,'rgba(10,2,30,.88)');
+  ctx.fillStyle=bgGrad; ctx.fill();
+
+  // inner subtle border
+  roundRect(boardX-4,boardY-4,boardSize+8,boardSize+8,3);
+  ctx.strokeStyle='rgba(0,229,255,.18)'; ctx.lineWidth=1; ctx.stroke();
+}
+
+function drawGridLines(){
+  // Main grid lines with cyan glow
+  glowOn(P.cyan,5);
+  ctx.strokeStyle='rgba(0,229,255,.55)'; ctx.lineWidth=1.3; ctx.lineCap='round';
+  for(let y=0;y<GRID;y++){
+    const[x1,y1]=g2s(0,y),[x2,y2]=g2s(GRID-1,y);
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  }
+  for(let x=0;x<GRID;x++){
+    const[x1,y1]=g2s(x,0),[x2,y2]=g2s(x,GRID-1);
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  }
+  glowOff();
+
+  // Diagonals - dimmer magenta
+  glowOn(P.magenta,3);
+  ctx.strokeStyle='rgba(255,45,149,.30)'; ctx.lineWidth=1;
+  for(let cx=0;cx<4;cx++)for(let cy=0;cy<4;cy++){
+    let s1,s2;
+    (cx+cy)%2===0?([s1,s2]=[g2s(cx,cy),g2s(cx+1,cy+1)]):([s1,s2]=[g2s(cx,cy+1),g2s(cx+1,cy)]);
+    ctx.beginPath(); ctx.moveTo(s1[0],s1[1]); ctx.lineTo(s2[0],s2[1]); ctx.stroke();
+  }
+  glowOff();
+}
+
+function drawIntersections(){
+  for(let x=0;x<GRID;x++)for(let y=0;y<GRID;y++){
+    const[sx,sy]=g2s(x,y);
+    // glow dot
+    glowOn(P.cyan,4);
+    ctx.beginPath(); ctx.arc(sx,sy,2.5,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,229,255,.7)'; ctx.fill();
+    glowOff();
+    // bright center
+    ctx.beginPath(); ctx.arc(sx,sy,1,0,Math.PI*2);
+    ctx.fillStyle='#c0f8ff'; ctx.fill();
+  }
+}
+
+function drawPiece(gx,gy,color,opts={}){
+  const[sx,sy]=g2s(gx,gy);
+  const r=PR;
+  const {captureFlash,grayOn,converted,isLastMove}=opts;
+
+  if(captureFlash&&grayOn){
+    // ghost-white flash during capture
+    glowOn('#ffffff',14);
+    ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2);
+    const g=ctx.createRadialGradient(sx-r*.25,sy-r*.3,r*.05,sx,sy,r);
+    g.addColorStop(0,'#ffffff'); g.addColorStop(.7,'#aaaaaa'); g.addColorStop(1,'#666666');
+    ctx.fillStyle=g; ctx.fill();
+    glowOff();
+    return;
+  }
+
+  const isBlack=(color===BLACK);
+  const prime=isBlack?P.cyan:P.magenta;
+  const prime2=isBlack?P.cya2:P.mag2;
+
+  // Outer glow
+  glowOn(prime,isBlack?14:16);
+
+  // Piece body with radial gradient for 3D sphere
+  const grad=ctx.createRadialGradient(sx-r*.28,sy-r*.32,r*.06,sx,sy,r);
+  if(isBlack){
+    grad.addColorStop(0,'#556688');       // specular highlight
+    grad.addColorStop(.25,'#1a2040');      // upper light
+    grad.addColorStop(.6,'#080818');       // base dark
+    grad.addColorStop(.85,'#002030');      // edge
+    grad.addColorStop(1,prime);            // glow ring
+  }else{
+    grad.addColorStop(0,'#ffffff');        // bright specular
+    grad.addColorStop(.2,'#f0e0f8');       // light
+    grad.addColorStop(.55,'#c090b0');      // mid
+    grad.addColorStop(.8,'#602045');       // dark edge
+    grad.addColorStop(1,prime);            // glow ring
+  }
+  ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2);
+  ctx.fillStyle=grad; ctx.fill();
+  glowOff();
+
+  // Fine border
+  ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2);
+  ctx.strokeStyle=isBlack?'rgba(0,200,240,.5)':'rgba(255,80,160,.5)';
+  ctx.lineWidth=.8; ctx.stroke();
+
+  // Second inner glow ring (subtle)
+  ctx.beginPath(); ctx.arc(sx,sy,r-1.5,0,Math.PI*2);
+  ctx.strokeStyle=isBlack?'rgba(0,229,255,.15)':'rgba(255,45,149,.15)';
+  ctx.lineWidth=1.5; ctx.stroke();
+
+  // Converted highlight ring
+  if(converted){
+    glowOn(P.gold,15);
+    ctx.beginPath(); ctx.arc(sx,sy,r+3.5,0,Math.PI*2);
+    ctx.strokeStyle='rgba(255,232,0,.8)'; ctx.lineWidth=2.5; ctx.stroke();
+    glowOff();
+  }
+
+  // Last move indicator dot
+  if(isLastMove){
+    glowOn(prime,8);
+    ctx.beginPath(); ctx.arc(sx,sy,3.5,0,Math.PI*2);
+    ctx.fillStyle='#ffffff'; ctx.fill();
+    glowOff();
+  }
+}
+
+function drawValidMoves(){
+  const t=performance.now()/1000;
+  const pulse=.5+.5*Math.sin(t*5); // pulsating
+  for(const[mx,my]of validMoves){
+    const[sx,sy]=g2s(mx,my);
+    const vr=Math.max(9,cell*.15);
+    // pulsing glow ring
+    glowOn(P.cyan,6+pulse*4);
+    ctx.beginPath(); ctx.arc(sx,sy,vr,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(0,229,255,${.45+pulse*.3})`; ctx.lineWidth=2.2; ctx.stroke();
+    // center fill
+    ctx.beginPath(); ctx.arc(sx,sy,vr-2,0,Math.PI*2);
+    ctx.fillStyle=`rgba(0,229,255,${.12+pulse*.08})`; ctx.fill();
+    glowOff();
+  }
+}
+
+function drawSelection(){
+  if(!selPiece||isAnimating)return;
+  const[sx,sy]=g2s(selPiece[0],selPiece[1]);
+  const t=performance.now()/1000;
+  const pulse=.5+.5*Math.sin(t*6);
+
+  // Golden glow ring
+  glowOn(P.gold,10+pulse*8);
+  ctx.beginPath(); ctx.arc(sx,sy,PR+5,0,Math.PI*2);
+  ctx.strokeStyle=`rgba(255,232,0,${.7+pulse*.3})`; ctx.lineWidth=2.8; ctx.stroke();
+  glowOff();
+
+  // Inner bright ring
+  ctx.beginPath(); ctx.arc(sx,sy,PR+5,0,Math.PI*2);
+  ctx.strokeStyle=`rgba(255,255,200,${.5+pulse*.3})`; ctx.lineWidth=1; ctx.stroke();
+}
+
+function drawStatusBar(){
+  const y=boardY-24;
+  const{bc,wc}=countPieces(board);
+
+  // -- Black piece count (left) --
+  ctx.font='bold 14px "Courier New",monospace';
+  ctx.textBaseline='middle';
+
+  // Cyan dot for black
+  glowOn(P.cyan,6);
+  ctx.beginPath(); ctx.arc(26,y,6.5,0,Math.PI*2);
+  const bg=ctx.createRadialGradient(22,24,1,26,y,6.5);
+  bg.addColorStop(0,'#445566'); bg.addColorStop(1,P.cyan);
+  ctx.fillStyle=bg; ctx.fill();
+  glowOff();
+
+  ctx.textAlign='left';
+  ctx.fillStyle=P.cyan; glowOn(P.cyan,4);
+  ctx.fillText('BLACK '+bc,40,y);
+  glowOff();
+
+  // -- White piece count (right) --
+  glowOn(P.magenta,6);
+  ctx.beginPath(); ctx.arc(CW-26,y,6.5,0,Math.PI*2);
+  const wg=ctx.createRadialGradient(CW-30,y-2,1,CW-26,y,6.5);
+  wg.addColorStop(0,'#ffffff'); wg.addColorStop(1,P.magenta);
+  ctx.fillStyle=wg; ctx.fill();
+  glowOff();
+
+  ctx.textAlign='right';
+  ctx.fillStyle=P.magenta; glowOn(P.magenta,4);
+  ctx.fillText('WHITE '+wc,CW-40,y);
+  glowOff();
+
+  // -- Turn indicator --
+  ctx.textAlign='center';
+  const turnText=gameOver?'GAME OVER':aiThinking?'WHITE THINKING...':(curPlayer===BLACK?'◆ BLACK TURN ◆':'◆ WHITE TURN ◆');
+  const turnColor=gameOver?P.gold:(curPlayer===BLACK?P.cyan:P.magenta);
+  ctx.font='bold 13px "Courier New",monospace';
+  ctx.fillStyle=turnColor;
+  glowOn(turnColor,5);
+  ctx.fillText(turnText,CW/2,y+22);
+  glowOff();
+}
+
+function drawButtons(){
+  const rowY=boardY+boardSize+18, bH=42, gap=10, hw=Math.floor((CW-28-gap)/2);
+  const btns=[
+    {x:14,y:rowY,w:hw,h:bH,label:'P v P',       id:'pvp'},
+    {x:14+hw+gap,y:rowY,w:hw,h:bH,label:'vs AI', id:'ai'},
+    {x:14,y:rowY+bH+gap,w:hw,h:bH,label:'RESTART',id:'restart'},
+    {x:14+hw+gap,y:rowY+bH+gap,w:hw,h:bH,label:'RESIGN', id:'resign'},
+  ];
+
+  for(const b of btns){
+    const isActive=(b.id==='pvp'&&gameMode==='pvp')||(b.id==='ai'&&gameMode==='ai');
+    const isDanger=b.id==='resign';
+    const accent=isDanger?P.magenta:P.cyan;
+
+    // Button glow
+    if(isActive)glowOn(accent,10);
+
+    roundRect(b.x,b.y,b.w,b.h,8);
+
+    if(isActive){
+      // Filled active button
+      const btnGrad=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);
+      btnGrad.addColorStop(0,accent); btnGrad.addColorStop(1,isDanger?P.mag2:P.cya2);
+      ctx.fillStyle=btnGrad; ctx.fill();
+    }else{
+      // Outline button
+      const btnBg=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);
+      btnBg.addColorStop(0,'rgba(20,5,50,.7)'); btnBg.addColorStop(1,'rgba(10,2,30,.7)');
+      ctx.fillStyle=btnBg; ctx.fill();
+    }
+
+    // Border
+    ctx.strokeStyle=isActive?'rgba(255,255,255,.25)':accent;
+    ctx.lineWidth=isActive?1:1.2;
+    if(!isActive)glowOn(accent,4);
+    ctx.stroke();
+    glowOff();
+
+    // Text
+    ctx.fillStyle=isActive?'#020010':accent;
+    ctx.font='bold 14px "Courier New",monospace';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    if(!isActive)glowOn(accent,3);
+    ctx.fillText(b.label,b.x+b.w/2,b.y+b.h/2);
+    glowOff();
+  }
+  ctx.textBaseline='alphabetic';
+
+  // Store for hit test
+  ctx.__btns=btns;
+}
+
+function drawWinOverlay(){
+  if(!gameOver||!winAnim)return;
+
+  const t=performance.now();
+  const elapsed=(t-winAnim.startTime)/1000;
+  const pulse=.5+.5*Math.sin(elapsed*7);
+
+  // Winner piece glow pulse
+  for(let x=0;x<GRID;x++)for(let y=0;y<GRID;y++){
+    if(board[x][y]!==winAnim.winner)continue;
+    const[sx,sy]=g2s(x,y);
+    glowOn(P.gold,14+pulse*10);
+    ctx.beginPath(); ctx.arc(sx,sy,PR+5+pulse*3,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(255,232,0,${.3+pulse*.5})`; ctx.lineWidth=2.5; ctx.stroke();
+    glowOff();
+  }
+
+  // Floating victory banner
+  const bw=210, bh=42, bx=(CW-bw)/2, by=boardY-38;
+  roundRect(bx,by,bw,bh,6);
+
+  // banner glow
+  glowOn(P.gold,16);
+  ctx.fillStyle='rgba(20,10,3,.85)'; ctx.fill();
+  ctx.strokeStyle=`rgba(255,232,0,${.6+pulse*.4})`; ctx.lineWidth=1.8; ctx.stroke();
+  glowOff();
+
+  // banner text
+  const winText=winAnim.winner===BLACK?'◆  BLACK  WINS  ◆':'◆  WHITE  WINS  ◆';
+  ctx.fillStyle=P.gold;
+  ctx.font='bold 15px "Courier New",monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  glowOn(P.gold,8);
+  ctx.fillText(winText,bx+bw/2,by+bh/2);
+  glowOff();
+}
+
+function drawModalOverlay(){
+  if(!gameOver||!modalText)return;
+
+  // Darken
+  ctx.fillStyle='rgba(2,0,10,.55)'; ctx.fillRect(0,0,CW,CH);
+
+  // Modal box
+  const mw=270, mh=160, mx=(CW-mw)/2, my=(CH-mh)/2-20;
+  roundRect(mx,my,mw,mh,10);
+
+  // Modal bg with gradient
+  const modGrad=ctx.createLinearGradient(mx,my,mx,my+mh);
+  modGrad.addColorStop(0,'rgba(18,4,40,.97)'); modGrad.addColorStop(1,'rgba(8,1,20,.97)');
+  ctx.fillStyle=modGrad; ctx.fill();
+
+  // Modal border glow
+  glowOn(P.cyan,12);
+  ctx.strokeStyle='rgba(0,229,255,.5)'; ctx.lineWidth=1.5; ctx.stroke();
+  glowOff();
+
+  // Message text
+  ctx.fillStyle=P.white;
+  ctx.font='bold 16px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(modalText,mx+mw/2,my+52);
+
+  // Restart button
+  const rbw=150, rbh=42, rbx=mx+(mw-rbw)/2, rby=my+mh-58;
+  roundRect(rbx,rby,rbw,rbh,8);
+  glowOn(P.cyan,10);
+  const rGrad=ctx.createLinearGradient(rbx,rby,rbx,rby+rbh);
+  rGrad.addColorStop(0,P.cyan); rGrad.addColorStop(1,P.cya2);
+  ctx.fillStyle=rGrad; ctx.fill();
+  ctx.fillStyle='#020010';
+  ctx.font='bold 14px "Courier New",monospace';
+  ctx.fillText('PLAY  AGAIN',rbx+rbw/2,rby+rbh/2);
+  glowOff();
+
+  overlayRect={x:rbx,y:rby,w:rbw,h:rbh};
+  ctx.textBaseline='alphabetic';
+}
+
+// ═══════════════════════════════════════
+//  MAIN DRAW
+// ═══════════════════════════════════════
+function drawAll(){
+  ctx.clearRect(0,0,CW,CH);
+
+  // Background
+  ctx.fillStyle=P.bg; ctx.fillRect(0,0,CW,CH);
+  drawStars();
+
+  // Board
+  drawBoardPanel();
+  drawGridLines();
+  drawIntersections();
+
+  // Valid moves (below pieces)
+  if(!gameOver&&!isAnimating)drawValidMoves();
+
+  // Pieces
+  for(let x=0;x<GRID;x++)for(let y=0;y<GRID;y++){
+    if(board[x][y]===EMPTY)continue;
+    const opts={};
+    if(animCapture&&animCapture.targets.some(([tx,ty])=>tx===x&&ty===y)){
+      opts.captureFlash=true; opts.grayOn=animCapture.grayOn;
+      if(animCapture.type==='converted')opts.converted=true;
+    }
+    if(lastMove&&lastMove.tx===x&&lastMove.ty===y)opts.isLastMove=true;
+    drawPiece(x,y,board[x][y],opts);
+  }
+
+  // Selection ring (above pieces)
+  drawSelection();
+
+  // Win overlay
+  drawWinOverlay();
+
+  // Burst particles
+  drawBurst();
+
+  // UI layer
+  drawTitle();
+  drawStatusBar();
+  drawButtons();
+
+  // Modal (topmost)
+  drawModalOverlay();
+
+  // Scanlines overlay
+  ctx.fillStyle='rgba(0,0,0,.025)';
+  for(let sy=0;sy<CH;sy+=3)ctx.fillRect(0,sy,CW,1);
+
+  // Vignette
+  const vig=ctx.createRadialGradient(CW/2,CH/2,CH*.35,CW/2,CH/2,CH*.72);
+  vig.addColorStop(0,'transparent'); vig.addColorStop(1,'rgba(2,0,12,.45)');
+  ctx.fillStyle=vig; ctx.fillRect(0,0,CW,CH);
+}
+
+// ═══════════════════════════════════════
+//  GAME ACTIONS (async)
+// ═══════════════════════════════════════
+async function playCaptureStep(targets,p,step){
+  if(targets.length===0)return;
+  // Flash captured pieces white 3 times
+  for(let i=0;i<3;i++){
+    animCapture={type:'gray-flash',stepNo:step,targets,grayOn:i%2===0};
+    blip(880+i*60,.06,'square',.03);
+    await sleep(120);
+  }
+  // Convert to new color
+  for(const[cx,cy]of targets)board[cx][cy]=p;
+  blip(220,.1,'sawtooth',.04);
+  // Spawn burst particles at each captured pos
+  for(const[cx,cy]of targets){
+    const[sx,sy]=g2s(cx,cy);
+    spawnBurst(sx,sy,10, p===BLACK?0:255, p===BLACK?229:45, p===BLACK?255:149);
+  }
+  animCapture={type:'converted',stepNo:step,targets,grayOn:false};
+  await sleep(300);
+  animCapture=null;
+  await sleep(120);
+}
+
+async function doMove(fx,fy,tx,ty){
+  const p=board[fx][fy];
+  board[fx][fy]=EMPTY; board[tx][ty]=p;
+  lastMove={fx,fy,tx,ty};
+  blip(600,.06,'square',.03);
+  await sleep(80);
+
+  let q=[[tx,ty]], step=1;
+  while(q.length>0){
+    const seen=new Set, next=[];
+    for(const[qx,qy]of q){
+      const caps=findCapturesOnBoard(board,qx,qy,p);
+      for(const[cx,cy]of caps){
+        const k=cx*GRID+cy;
+        if(board[cx][cy]!==p&&!seen.has(k)){seen.add(k);next.push([cx,cy])}
+      }
+    }
+    await playCaptureStep(next,p,step);
+    q=next; step++;
+  }
+
+  const{bc,wc}=countPieces(board);
+  if(bc===0){endGame('白 方 获 胜',WHITE);return}
+  if(wc===0){endGame('黑 方 获 胜',BLACK);return}
+
+  curPlayer=curPlayer===BLACK?WHITE:BLACK;
+  selPiece=null; validMoves=[];
+  checkNoMoveLoss();
+}
+
+function checkNoMoveLoss(){
+  if(gameOver)return;
+  if(hasAnyMove(board,curPlayer))return;
+  const loser=curPlayer===BLACK?'黑方':'白方', winner=curPlayer===BLACK?'白方':'黑方';
+  endGame(`${loser} 无路可走，${winner}获胜！`,curPlayer===BLACK?WHITE:BLACK);
+}
+
+function endGame(msg,wp){
+  if(gameOver)return;
+  gameOver=true; isAnimating=false; modalText=msg;
+  // Victory fanfare
+  blip(523,.1,'square',.04);
+  setTimeout(()=>blip(659,.1,'square',.04),100);
+  setTimeout(()=>blip(784,.1,'square',.04),200);
+  setTimeout(()=>blip(1047,.15,'square',.05),300);
+  if(wp===BLACK||wp===WHITE){
+    winAnim={winner:wp,startTime:performance.now()};
+    // Spawn burst from all winning pieces
+    for(let x=0;x<GRID;x++)for(let y=0;y<GRID;y++){
+      if(board[x][y]===wp){const[sx,sy]=g2s(x,y);spawnBurst(sx,sy,5,255,232,0)}
+    }
+  }
+}
+
+async function aiMove(){
+  if(gameOver||isAnimating||curPlayer!==aiColor)return;
+  aiThinking=true; isAnimating=true; selPiece=null; validMoves=[];
+  await sleep(400);
+  const m=chooseAiMove(board,aiColor);
+  if(!m){aiThinking=false; isAnimating=false; checkNoMoveLoss(); return}
+  await doMove(m.fx,m.fy,m.tx,m.ty);
+  aiThinking=false; isAnimating=false;
+}
+
+function resetGame(){
+  board=initBoard(); curPlayer=BLACK; selPiece=null; validMoves=[];
+  lastMove=null; gameOver=false; isAnimating=false;
+  animCapture=null; winAnim=null; aiThinking=false;
+  modalText=''; overlayRect=null; burstParts=[];
+  initStars();
+  if(gameMode==='ai')setTimeout(aiMove,350);
+}
+
+// ═══════════════════════════════════════
+//  INPUT
+// ═══════════════════════════════════════
+function hitTestBtn(x,y){
+  if(!ctx.__btns)return null;
+  for(const b of ctx.__btns)if(x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h)return b.id;
+  return null;
+}
+function inBoard(x,y){return x>=boardX-4&&x<=boardX+boardSize+4&&y>=boardY-4&&y<=boardY+boardSize+4}
+
+cvs.addEventListener('click',async e=>{
+  const rect=cvs.getBoundingClientRect();
+  const sx=(e.clientX-rect.left)*(CW/rect.width);
+  const sy=(e.clientY-rect.top)*(CH/rect.height);
+
+  // Modal overlay button
+  if(gameOver&&overlayRect&&sx>=overlayRect.x&&sx<=overlayRect.x+overlayRect.w&&sy>=overlayRect.y&&sy<=overlayRect.y+overlayRect.h){
+    resetGame(); return;
+  }
+
+  // Buttons
+  const bid=hitTestBtn(sx,sy);
+  if(bid==='pvp'){if(gameMode!=='pvp'){gameMode='pvp';resetGame()}return}
+  if(bid==='ai'){if(gameMode!=='ai'){gameMode='ai';resetGame()}return}
+  if(bid==='restart'){resetGame();return}
+  if(bid==='resign'){
+    if(gameOver||isAnimating)return;
+    const wp=curPlayer===BLACK?WHITE:BLACK;
+    endGame((curPlayer===BLACK?'黑方':'白方')+' 认输',wp);
+    return;
+  }
+
+  // Board click
+  if(!inBoard(sx,sy)||gameOver||isAnimating)return;
+  if(gameMode==='ai'&&curPlayer===aiColor)return;
+  const pt=s2g(sx,sy); if(!pt)return;
+  const[gx,gy]=pt;
+
+  if(selPiece){
+    if(validMoves.some(([vx,vy])=>vx===gx&&vy===gy)){
+      const[fx,fy]=selPiece;
+      isAnimating=true;
+      await doMove(fx,fy,gx,gy);
+      isAnimating=false;
+      if(gameMode==='ai')await aiMove();
+      return;
+    }
+    if(board[gx][gy]===curPlayer){
+      selPiece=[gx,gy]; validMoves=getValidMoves(board,gx,gy); return;
+    }
+    selPiece=null; validMoves=[]; return;
+  }
+  if(board[gx][gy]===curPlayer){
+    selPiece=[gx,gy]; validMoves=getValidMoves(board,gx,gy);
+  }
+});
+
+// ═══════════════════════════════════════
+//  ANIMATION LOOP
+// ═══════════════════════════════════════
+function loop(){
+  updateStars();
+  updateBurst();
+  drawAll();
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════
+board=initBoard();
+loop();
+if(gameMode==='ai')setTimeout(aiMove,500);
+</script>
+</body>
+</html>

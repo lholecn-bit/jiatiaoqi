@@ -1,0 +1,10 @@
+# 机密 —— 切勿提交
+private.config.js
+*.key
+
+# 上传/预览产物
+preview.jpg
+preview.png
+
+# 依赖
+node_modules/

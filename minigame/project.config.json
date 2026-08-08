@@ -1,0 +1,15 @@
+{
+  "miniprogramRoot": "./",
+  "projectname": "jiaotiaoqi",
+  "description": "夹挑棋 - 5x5 策略棋类",
+  "appid": "REPLACE_WITH_YOUR_APPID",
+  "setting": {
+    "es6": true,
+    "minified": true,
+    "packNpmManually": false,
+    "newFeature": true
+  },
+  "compileType": "game",
+  "libVersion": "2.30.0",
+  "condition": {}
+}

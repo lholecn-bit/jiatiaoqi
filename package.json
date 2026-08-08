@@ -1,0 +1,53 @@
+{
+  "name": "jiatiaoqi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "夹挑棋 - 5×5 策略棋类游戏",
+  "author": "Zhou Anchao <contact@jiatiaoqi.local>",
+  "homepage": "https://github.com/user/jiatiaoqi",
+  "main": "electron-main.js",
+  "scripts": {
+    "start:online": "node online-server.js",
+    "desktop": "electron . --no-sandbox",
+    "desktop:start": "electron . --no-sandbox",
+    "build:linux": "electron-builder --linux",
+    "build:deb": "electron-builder --linux deb",
+    "build:appimage": "electron-builder --linux AppImage"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.jiatiaoqi.chess",
+    "productName": "夹挑棋",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron-main.js",
+      "index.html",
+      "online-server.js",
+      "build/icon.png",
+      "node_modules/ws/**"
+    ],
+    "linux": {
+      "target": [
+        { "target": "deb", "arch": ["x64"] },
+        { "target": "AppImage", "arch": ["x64"] }
+      ],
+      "category": "Game",
+      "icon": "build/icon.png"
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0", "libnotify4", "libnss3",
+        "libxss1", "libxtst6", "xdg-utils",
+        "libatspi2.0-0", "libsecret-1-0"
+      ]
+    }
+  }
+}
