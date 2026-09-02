@@ -116,6 +116,15 @@
             font-size: 12px;
             color: #bdbdbd;
         }
+        .adv-toggle {
+            color: #90a4ae;
+            cursor: pointer;
+            font-size: 12px;
+            user-select: none;
+            text-decoration: none;
+        }
+        .adv-toggle:hover { color: #b0bec5; }
+        .adv-hidden { display: none !important; }
         #gameCanvas {
             cursor: pointer;
             border-radius: 10px;
@@ -202,10 +211,11 @@
 </div>
 
 <div class="online-panel" id="onlinePanel">
-    <input id="serverInput" placeholder="ws://127.0.0.1:8080" />
     <input id="roomInput" placeholder="房间号（如 1001）" />
     <button id="connectBtn">连接房间</button>
     <button id="disconnectBtn">断开连接</button>
+    <a id="advToggle" class="adv-toggle">高级设置 ▾</a>
+    <input id="serverInput" class="adv-hidden" placeholder="ws://127.0.0.1:8080" />
     <div class="online-tip" id="onlineTip">未连接</div>
 </div>
 
@@ -256,6 +266,7 @@ const roomInputEl = document.getElementById('roomInput');
 const connectBtnEl = document.getElementById('connectBtn');
 const disconnectBtnEl = document.getElementById('disconnectBtn');
 const onlineTipEl = document.getElementById('onlineTip');
+const advToggleEl = document.getElementById('advToggle');
 
 // Hi-DPI
 const dpr = window.devicePixelRatio || 1;
@@ -320,7 +331,22 @@ let onlineRoomId = '';
 let onlinePlayerColor = null;
 let onlinePlayersCount = 0;
 
-const DEFAULT_WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname || '127.0.0.1'}:8080`;
+// 自动推导 WebSocket 地址：用户已通过 URL 访问了本服务器，无需再输入。
+// 规则：
+//  - Electron 桌面版 (file://)        → ws://127.0.0.1:8080（桌面应用内置 WS 服务）
+//  - 80/443/8080 端口（生产部署）      → 同源 + /ws（Nginx 反代 或 server.js 单端口）
+//  - 其他端口（本地静态服务器开发场景） → 同机 8080（online-server.js 默认端口）
+function deriveWsUrl() {
+    if (location.protocol === 'file:') return 'ws://127.0.0.1:8080';
+    const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+    const port = Number(location.port || (location.protocol === 'https:' ? 443 : 80));
+    if (port === 80 || port === 443 || port === 8080) {
+        return `${scheme}://${location.host}/ws`;
+    }
+    return `${scheme}://${location.hostname || '127.0.0.1'}:8080`;
+}
+
+const DEFAULT_WS_URL = deriveWsUrl();
 serverInputEl.value = DEFAULT_WS_URL;
 
 function setOnlineTip(text) {
@@ -1331,7 +1357,7 @@ onlineModeBtn.addEventListener('click', () => {
     gameMode = 'online';
     updateModeUI();
     resetBoard();
-    setOnlineTip('在线模式：请输入服务器地址与房间号后连接');
+    setOnlineTip('在线模式：输入房间号后点「连接房间」（自动连接当前服务器）');
 });
 
 connectBtnEl.addEventListener('click', () => {
@@ -1342,6 +1368,11 @@ disconnectBtnEl.addEventListener('click', () => {
     closeOnlineSocket();
     setOnlineTip('已手动断开');
     updateUI();
+});
+
+advToggleEl.addEventListener('click', () => {
+    const hidden = serverInputEl.classList.toggle('adv-hidden');
+    advToggleEl.textContent = hidden ? '高级设置 ▾' : '高级设置 ▴';
 });
 
 // ========== Init ==========
