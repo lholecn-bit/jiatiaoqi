@@ -4,6 +4,7 @@
 
 const WebSocket = require('ws');
 const logic = require('./shared/logic');
+const { attachHeartbeat } = require('./shared/heartbeat');
 
 const { EMPTY, BLACK, WHITE, GRID } = logic;
 
@@ -171,6 +172,12 @@ function handleMessage(ws, raw) {
         return;
     }
 
+    // 应用层心跳：客户端探测连接存活性，原样回 pong
+    if (payload.type === 'ping') {
+        send(ws, { type: 'pong' });
+        return;
+    }
+
     if (!ws.meta || !ws.meta.roomId) {
         send(ws, { type: 'error', message: '请先加入房间' });
         return;
@@ -260,5 +267,8 @@ wss.on('connection', (ws) => {
         handleClose(ws);
     });
 });
+
+// 协议级心跳：清理半开连接（默认 30s，可用 HEARTBEAT_INTERVAL 覆盖）
+attachHeartbeat(wss, Number(process.env.HEARTBEAT_INTERVAL) || 30000);
 
 console.log(`Online server is running on ws://0.0.0.0:${PORT}`);
