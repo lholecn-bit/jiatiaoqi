@@ -1,10 +1,13 @@
-// 夹挑棋 · 纯逻辑层（平台无关）
-// ⚠️ 本文件是 shared/logic.js 的同步副本。
-// 修改规则时请先改 ../../shared/logic.js，再同步本文件。
-// 小游戏打包独立，需要自己的副本（微信云构建只打包 minigame/ 目录）。
+// 夹挑棋 · 纯逻辑层（平台无关）—— 权威源
 //
-// 抽自 index.html，无任何 DOM/window 依赖。
-// 小游戏版与网页版共享同一份规则实现，保证行为一致。
+// 本文件是夹挑棋游戏规则的唯一权威实现。
+// 使用方：
+//   online-server.js   → require('./shared/logic')   服务端权威校验
+//   minigame/js/logic.js → 同步副本（小游戏打包独立，需手动同步）
+//   index.html           → 逻辑内联于 <script>（历史原因，待后续拆出）
+//
+// 修改规则时，先改本文件，然后同步 minigame/js/logic.js 副本。
+// 两次 diff 应一致。
 
 // ========== Constants ==========
 const EMPTY = 0, BLACK = 1, WHITE = 2;

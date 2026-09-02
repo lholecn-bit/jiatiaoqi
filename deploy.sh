@@ -99,6 +99,10 @@ rsync -a --delete \
   --exclude "archive" \
   --exclude "docs" \
   --exclude "patent" \
+  --exclude "minigame" \
+  --exclude "preview.html" \
+  --exclude "electron-main.js" \
+  --exclude "build" \
   "$SCRIPT_DIR/" "$APP_DIR/"
 
 cd "$APP_DIR"
