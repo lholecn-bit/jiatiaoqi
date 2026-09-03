@@ -358,10 +358,13 @@ systemctl stop nginx
 mv /srv/jiaotiaoqi /srv/jiatiaoqi
 
 # 2) nginx 配置改名 + 内容替换
+#    注意：sites-enabled/ 下通常是软链接，mv 只改链接名、目标仍指向旧文件，
+#    必须删旧链接并重新 ln -sf 指向新文件名
 cd /etc/nginx
 mv sites-available/jiaotiaoqi.conf sites-available/jiatiaoqi.conf
-mv sites-enabled/jiaotiaoqi.conf sites-enabled/jiatiaoqi.conf
+rm -f sites-enabled/jiaotiaoqi.conf sites-enabled/jiatiaoqi.conf
 sed -i 's#/srv/jiaotiaoqi#/srv/jiatiaoqi#g' sites-available/jiatiaoqi.conf
+ln -sf /etc/nginx/sites-available/jiatiaoqi.conf sites-enabled/jiatiaoqi.conf
 nginx -t && systemctl start nginx
 
 # 3) 用新拼写重拉 PM2 服务（目录随 mv 一并迁移）
