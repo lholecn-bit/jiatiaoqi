@@ -103,6 +103,11 @@ pkill -f "node server.js"        # 或 kill $(cat .server.pid)
 - 进程记录：`.server.pid`（由 `start-server.sh` 自动写入/清理，已加入 `.gitignore`）
 - **何时需要重启**：只有改动服务端代码（`server.js` / `online-server.js`）才需重启；改动前端 `index.html` 直接刷新浏览器即可（服务端每次请求实时读文件）。
 
+> ⚠️ **重要**：以上启停脚本只管理 `server.js`（单端口合并服务）。
+> 若该端口正被 **PM2 生产部署的 `online-server.js`** 占用（deploy.sh 架构），
+> 请使用 `pm2 restart jiaotiaoqi-ws` / `pm2 stop jiaotiaoqi-ws`，
+> 两种形态共用 8080，不要混用，否则脚本会提示“端口被其它程序占用”。
+
 ---
 
 ## 4. 生产部署（推荐：Nginx + PM2）

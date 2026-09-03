@@ -8,7 +8,7 @@
 #   PORT=9000 ./start-server.sh      # 自定义端口
 #
 # 配套：
-#   ./stop-server.sh                 # 停止
+#   ./stop-server.sh                 # 停止（可清掉多个实例）
 #   ./restart-server.sh              # 重启
 # ============================================================
 set -euo pipefail
@@ -17,61 +17,67 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${PORT:-8080}"
 PID_FILE="$APP_DIR/.server.pid"
 
-# ---- 命令行是否为 server.js ----
-has_server_js() {
-    local pid="$1"
-    ps -o args= -p "$pid" 2>/dev/null | grep -q 'server\.js'
+# ---- 是否为"node 启动的 server.js"（精确到文件名，排除 online-server.js）----
+is_node_server() {
+    local pid="$1" args last
+    args="$(ps -o args= -p "$pid" 2>/dev/null)" || return 1
+    [[ "$args" =~ node[[:space:]]+ ]] || return 1
+    last="${args##* }"
+    last="${last##*/}"
+    [[ "$last" == "server.js" ]]
 }
 
-# ---- cwd 是否为本项目目录（读不到时视为未知，不强制） ----
+# ---- cwd 是否为本项目目录（读不到时视为未知，不强制）----
 cwd_matches() {
-    local pid="$1"
-    local cwd
+    local pid="$1" cwd
     cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null)" || return 1
     [[ "$cwd" == "$APP_DIR" ]]
 }
 
-# ---- 候选进程：命令行锚定的 server.js + 占用目标端口的进程 ----
-candidates() {
-    if command -v pgrep >/dev/null 2>&1; then
-        pgrep -f '^node server\.js$' 2>/dev/null || true
-    fi
+# ---- 占用目标端口的进程 PID 列表 ----
+port_pids() {
     if command -v lsof >/dev/null 2>&1; then
-        local pid
-        for pid in $(lsof -ti "tcp:$PORT" 2>/dev/null || true); do
-            has_server_js "$pid" && echo "$pid"
-        done
+        lsof -ti "tcp:$PORT" 2>/dev/null || true
+    elif command -v ss >/dev/null 2>&1; then
+        ss -tlnp 2>/dev/null | grep -E ":$PORT[[:space:]]" | grep -o 'pid=[0-9]*' | cut -d= -f2 || true
     fi
 }
 
-# ---- 检测既有实例：输出 pid 与层级（strict/pidfile/loose） ----
-find_existing() {
+# ---- 全部候选：按命令行找的 server.js + 占端口的 server.js ----
+all_server_pids() {
     local pid
-    for pid in $(candidates | sort -u); do
-        cwd_matches "$pid" && { echo "$pid strict"; return 0; }
-    done
-    if [[ -f "$PID_FILE" ]]; then
-        pid="$(tr -d ' \t\n\r' < "$PID_FILE")"
-        if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null && has_server_js "$pid"; then
-            echo "$pid pidfile"
-            return 0
-        fi
+    if command -v pgrep >/dev/null 2>&1; then
+        for pid in $(pgrep -f 'server\.js' 2>/dev/null || true); do
+            is_node_server "$pid" && echo "$pid"
+        done
     fi
-    for pid in $(candidates | sort -u); do
-        has_server_js "$pid" && { echo "$pid loose"; return 0; }
+    for pid in $(port_pids); do
+        is_node_server "$pid" && echo "$pid"
     done
-    return 1
 }
 
 # ---- 端口是否被占用 ----
 port_in_use() {
-    if command -v ss >/dev/null 2>&1; then
-        ss -tln 2>/dev/null | grep -q ":$PORT "
-    elif command -v lsof >/dev/null 2>&1; then
-        lsof -i "tcp:$PORT" -sTCP:LISTEN >/dev/null 2>&1
-    else
-        return 1
+    [[ -n "$(port_pids | head -1)" ]]
+}
+
+# ---- 检测既有实例：优先本目录实例，其次 PID 文件，最后任意 server.js ----
+find_existing() {
+    local pid
+    for pid in $(all_server_pids | sort -un); do
+        cwd_matches "$pid" && { echo "$pid strict"; return 0; }
+    done
+    if [[ -f "$PID_FILE" ]]; then
+        pid="$(tr -d ' \t\n\r' < "$PID_FILE")"
+        if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null && is_node_server "$pid"; then
+            echo "$pid pidfile"
+            return 0
+        fi
     fi
+    for pid in $(all_server_pids | sort -un); do
+        is_node_server "$pid" && { echo "$pid loose"; return 0; }
+    done
+    return 1
 }
 
 read -r pid how <<<"$(find_existing || echo '')"
@@ -81,15 +87,18 @@ if [[ -n "$pid" ]]; then
             echo "[start] 服务已在运行（PID=$pid，端口 $PORT），无需重复启动。"
             ;;
         loose)
-            echo "[start] 检测到已运行的 server.js（PID=$pid，非本目录启动）。" >&2
-            echo "        如需用本脚本接管，请先执行 ./stop-server.sh 或 ./restart-server.sh。" >&2
+            echo "[start] 检测到已运行的 server.js（PID=$pid），无需重复启动。" >&2
+            echo "        如需重启，请执行 ./restart-server.sh。" >&2
             ;;
     esac
     exit 0
 fi
 
 if port_in_use; then
-    echo "[start] 端口 $PORT 已被占用（非夹挑棋 server.js）。" >&2
+    echo "[start] 端口 $PORT 已被其它程序占用：" >&2
+    for pid in $(port_pids); do
+        echo "        PID=$pid : $(ps -o args= -p "$pid" 2>/dev/null | head -1)" >&2
+    done
     echo "        请先释放端口，或改用自定义端口：PORT=xxxx ./start-server.sh" >&2
     exit 1
 fi
