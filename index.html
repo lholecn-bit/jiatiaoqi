@@ -811,6 +811,29 @@ const AVATAR_SCHEMA = 2;
 // 旧头像索引 → 新索引（旧集里只有 🐯=0 和 🐵=8 在生肖中保留，其余回落默认 🐭）
 const AVATAR_MIGRATION = { 0: 2, 8: 8 };
 
+// ========== 游客随机名号（「A的B+生肖」，A/B 均褒义，随机组合不固定）==========
+const ZODIAC_NAMES = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
+// 前置褒义形容词
+const NAME_A = [
+    '聪明', '勇敢', '机灵', '可爱', '活泼', '善良', '乐观', '幽默', '帅气', '温柔',
+    '机智', '神勇', '聪慧', '灵巧', '威风', '淡定', '快乐', '勤奋', '自信', '优雅'
+];
+// 后置叠词（描写性情态，与生肖动物搭配读起来更俏皮）
+const NAME_B = [
+    '跳跳', '乖乖', '嘟嘟', '闪闪', '乐乐', '圆圆', '灵灵', '悠悠', '蹦蹦', '飞飞',
+    '亮亮', '甜甜', '快快', '暖暖', '美美', '壮壮', '帅帅', '聪聪', '萌萌', '酷酷'
+];
+
+function randomGuestName(avatarIndex) {
+    const a = NAME_A[Math.floor(Math.random() * NAME_A.length)];
+    let b;
+    do {
+        b = NAME_B[Math.floor(Math.random() * NAME_B.length)];
+    } while (a.includes(b[0])); // 避免「帅气的帅帅」「聪明的聪聪」这类同字重复
+    const z = ZODIAC_NAMES[avatarIndex] || ZODIAC_NAMES[0];
+    return a + '的' + b + z;
+}
+
 // ========== DOM ==========
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -1193,6 +1216,10 @@ function loadProfile() {
             if (needsMigrate) {
                 localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); // 立即回写，迁移只跑一次
             }
+        } else {
+            // 首次进入（游客）：随机生成「A的B+生肖」名号并持久化，之后刷新不再变化
+            profile.name = randomGuestName(profile.avatar);
+            localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
         }
     } catch (e) {}
 }
