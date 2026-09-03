@@ -3,193 +3,366 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="夹挑棋：5×5 交叉点连线棋盘的双人回合制策略棋类游戏">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0e1222">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23131828'/%3E%3Ccircle cx='32' cy='32' r='19' fill='%23e8b64f'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%23212019'/%3E%3C/svg%3E">
     <title>夹挑棋</title>
     <style>
+        /* ============ 夹挑棋 · 界面皮肤（墨夜鎏金） ============
+           仅视觉层：不改动任何 ID / class 契约与脚本逻辑。 */
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { color-scheme: dark; }
+
         body {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            background: #2b2b2b;
-            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
-            color: #eee;
+            padding: 20px 16px 40px;
+            overflow-x: hidden;
+            background:
+                radial-gradient(1100px 560px at 50% -10%, rgba(88, 106, 180, 0.22), transparent 62%),
+                radial-gradient(780px 480px at 50% 112%, rgba(216, 158, 70, 0.11), transparent 60%),
+                linear-gradient(180deg, #151b30 0%, #0e1222 55%, #090c16 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+                'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+            color: #e8ecf5;
             user-select: none;
+            -webkit-font-smoothing: antialiased;
         }
+
         h1 {
-            font-size: 36px;
-            margin-bottom: 6px;
-            letter-spacing: 6px;
-            color: #f0d060;
-            text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            font-family: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+            font-size: clamp(36px, 7vw, 48px);
+            font-weight: 700;
+            line-height: 1.25;
+            letter-spacing: 0.24em;
+            text-indent: 0.24em;               /* 抵消末字后字距，保证视觉居中 */
+            background: linear-gradient(180deg, #f9e7ab 0%, #efc767 48%, #c18a2f 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            filter: drop-shadow(0 3px 12px rgba(0, 0, 0, 0.4));
         }
+
+        #subtitle {
+            margin-top: 9px;
+            font-size: 12px;
+            letter-spacing: 0.3em;
+            text-indent: 0.3em;
+            color: #828ba1;
+        }
+        #subtitle::before,
+        #subtitle::after {
+            content: '';
+            display: inline-block;
+            width: 18px;
+            height: 1px;
+            vertical-align: middle;
+            margin: 0 12px;
+            background: linear-gradient(90deg, transparent, rgba(228, 183, 92, 0.7));
+        }
+        #subtitle::after {
+            background: linear-gradient(90deg, rgba(228, 183, 92, 0.7), transparent);
+        }
+
         .score-bar {
             display: flex;
-            gap: 36px;
-            margin-bottom: 6px;
-            font-size: 18px;
+            gap: 12px;
+            margin: 24px 0 12px;
         }
         .score-bar .side {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 4px 16px;
-            border-radius: 6px;
-            transition: background 0.3s;
+            gap: 9px;
+            padding: 7px 20px 7px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.045);
+            backdrop-filter: blur(6px);
+            font-size: 14px;
+            color: #b9c1d2;
+            transition: border-color 0.25s, background 0.25s, box-shadow 0.25s, transform 0.2s;
         }
-        .score-bar .side.active {
-            background: rgba(255, 255, 255, 0.1);
+        .score-bar .side b { color: #f2f5fb; font-variant-numeric: tabular-nums; }
+        .score-bar .side.active { transform: translateY(-1px); }
+        #blackSide.active {
+            border-color: rgba(243, 207, 122, 0.6);
+            background: linear-gradient(180deg, rgba(243, 207, 122, 0.17), rgba(243, 207, 122, 0.04));
+            box-shadow: 0 0 0 1px rgba(243, 207, 122, 0.12), 0 6px 18px -8px rgba(0, 0, 0, 0.55);
         }
+        #whiteSide.active {
+            border-color: rgba(148, 187, 255, 0.6);
+            background: linear-gradient(180deg, rgba(148, 187, 255, 0.15), rgba(148, 187, 255, 0.04));
+            box-shadow: 0 0 0 1px rgba(148, 187, 255, 0.12), 0 6px 18px -8px rgba(0, 0, 0, 0.55);
+        }
+
         .dot {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
+            width: 17px;
+            height: 17px;
             border-radius: 50%;
+            flex: none;
         }
-        .dot.black { background: #333; border: 2px solid #666; }
-        .dot.white { background: #eee; border: 2px solid #aaa; }
+        .dot.black {
+            background: radial-gradient(circle at 35% 30%, #5b5b66, #141419 72%);
+            border: 1px solid #000;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+        }
+        .dot.white {
+            background: radial-gradient(circle at 35% 30%, #ffffff, #d9d2c0 78%);
+            border: 1px solid #b5af9f;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        }
+
         #status {
-            font-size: 20px;
-            margin-bottom: 10px;
-            height: 32px;
-            line-height: 32px;
-            color: #ccc;
+            position: relative;
+            margin: 2px 0 16px;
+            padding: 6px 20px 6px 34px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            color: #cdd5e4;
+            font-size: 13.5px;
+            letter-spacing: 0.05em;
         }
+        #status::before {
+            content: '';
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            width: 8px;
+            height: 8px;
+            margin-top: -4px;
+            border-radius: 50%;
+            background: #3fd99a;
+            animation: statusPulse 1.9s ease-out infinite;
+        }
+        @keyframes statusPulse {
+            0%   { box-shadow: 0 0 0 0 rgba(63, 217, 154, 0.45); }
+            70%  { box-shadow: 0 0 0 7px rgba(63, 217, 154, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(63, 217, 154, 0); }
+        }
+
         .mode-row {
             display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 2px;
+            padding: 4px;
+            margin-bottom: 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
         }
         .mode-btn {
-            padding: 6px 14px;
-            border: 1px solid #777;
-            background: #3a3a3a;
-            color: #e6e6e6;
-            border-radius: 6px;
-            cursor: pointer;
+            border: 0;
+            background: transparent;
+            color: #97a0b4;
+            padding: 8px 20px;
+            border-radius: 999px;
             font-size: 14px;
             font-family: inherit;
-            transition: all 0.2s;
+            cursor: pointer;
+            transition: color 0.2s, background 0.2s, box-shadow 0.2s;
         }
-        .mode-btn:hover { background: #4a4a4a; }
+        .mode-btn:hover { color: #eef1f8; }
         .mode-btn.active {
-            background: #5c8f2f;
-            border-color: #8bc34a;
-            color: #fff;
+            background: linear-gradient(180deg, #f4d485, #dcab4c);
+            color: #2b2010;
+            font-weight: 700;
+            box-shadow: 0 4px 14px -4px rgba(220, 171, 76, 0.6);
         }
+
         .online-panel {
             display: none;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 10px;
-            flex-wrap: wrap;
             justify-content: center;
-            max-width: 520px;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+            max-width: 580px;
         }
         .online-panel.show { display: flex; }
         .online-panel input {
-            padding: 6px 8px;
-            border-radius: 6px;
-            border: 1px solid #666;
-            background: #242424;
-            color: #eee;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(8, 12, 24, 0.7);
+            color: #edf0f8;
             font-size: 13px;
             font-family: inherit;
-            width: 130px;
+            width: 150px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .online-panel input#serverInput { width: 180px; }
+        .online-panel input::placeholder { color: #6b7489; }
+        .online-panel input:focus {
+            border-color: rgba(243, 207, 122, 0.65);
+            box-shadow: 0 0 0 3px rgba(243, 207, 122, 0.12);
+        }
+        .online-panel input#roomInput { width: 142px; }
+        .online-panel input#serverInput { width: 210px; }
         .online-panel button {
-            padding: 6px 10px;
-            border: none;
-            border-radius: 6px;
-            background: #546e7a;
-            color: #fff;
-            cursor: pointer;
-            font-size: 13px;
+            border: 0;
+            border-radius: 10px;
+            padding: 8px 15px;
+            font-size: 13.5px;
             font-family: inherit;
+            cursor: pointer;
+            transition: filter 0.2s, background 0.2s, transform 0.1s;
         }
-        .online-panel button:hover { background: #455a64; }
+        .online-panel button:active { transform: scale(0.97); }
+        .online-panel button:disabled { opacity: 0.55; cursor: not-allowed; }
+        #connectBtn {
+            background: linear-gradient(180deg, #35c891, #1fa372);
+            color: #fff;
+            font-weight: 600;
+        }
+        #connectBtn:hover:not(:disabled) { filter: brightness(1.08); }
+        #disconnectBtn {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: #cfd6e4;
+        }
+        #disconnectBtn:hover { background: rgba(255, 255, 255, 0.08); }
         .online-tip {
             width: 100%;
             text-align: center;
             font-size: 12px;
-            color: #bdbdbd;
+            color: #93a0b8;
+            margin-top: 1px;
         }
         .adv-toggle {
-            color: #90a4ae;
+            color: #8fa2c6;
             cursor: pointer;
             font-size: 12px;
-            user-select: none;
             text-decoration: none;
+            user-select: none;
+            transition: color 0.2s;
         }
-        .adv-toggle:hover { color: #b0bec5; }
+        .adv-toggle:hover { color: #d3def2; }
         .adv-hidden { display: none !important; }
-        #gameCanvas {
-            cursor: pointer;
-            border-radius: 10px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+
+        .board-frame {
+            display: inline-flex;
+            padding: 14px;
+            margin: 4px 0 8px;
+            border-radius: 24px;
+            background: linear-gradient(180deg, #29314e 0%, #1a2139 55%, #141a2e 100%);
+            border: 1px solid rgba(240, 199, 110, 0.22);
+            box-shadow:
+                0 30px 70px -20px rgba(0, 0, 0, 0.75),
+                0 8px 24px -12px rgba(0, 0, 0, 0.6),
+                inset 0 1px 0 rgba(255, 255, 255, 0.09);
         }
+        #gameCanvas {
+            display: block;
+            width: min(500px, calc(100vw - 88px));
+            height: auto;
+            border-radius: 14px;
+            cursor: pointer;
+            touch-action: manipulation;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+        }
+
         .btn-row {
-            margin-top: 14px;
+            margin-top: 16px;
             display: flex;
-            gap: 16px;
+            gap: 14px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         .btn-row button {
-            padding: 10px 28px;
-            font-size: 16px;
+            padding: 12px 30px;
+            font-size: 15.5px;
             border: none;
-            border-radius: 8px;
+            border-radius: 13px;
             cursor: pointer;
             font-family: inherit;
-            font-weight: bold;
-            transition: background 0.2s, transform 0.1s;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            color: #fff;
+            transition: transform 0.12s, filter 0.2s, box-shadow 0.2s;
         }
+        .btn-row button:hover { filter: brightness(1.07); }
         .btn-row button:active { transform: scale(0.96); }
-        #restartBtn { background: #4CAF50; color: #fff; }
-        #restartBtn:hover { background: #43a047; }
-        #surrenderBtn { background: #e53935; color: #fff; }
-        #surrenderBtn:hover { background: #c62828; }
-        /* Result Panel */
+        #restartBtn {
+            background: linear-gradient(180deg, #3cd792, #1eaf77);
+            box-shadow: 0 10px 24px -10px rgba(38, 205, 146, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+        #surrenderBtn {
+            background: linear-gradient(180deg, #ff8a80, #e14b43);
+            box-shadow: 0 10px 24px -10px rgba(225, 75, 67, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+        }
+
+        /* 对局结果：居中浮层（原右上角小弹窗） */
         #overlay {
             display: none;
             position: fixed;
-            top: 18px;
-            right: 18px;
-            z-index: 100;
+            inset: 0;
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(6, 9, 18, 0.6);
+            backdrop-filter: blur(5px);
         }
-        #overlay.show { display: block; }
+        #overlay.show { display: flex; animation: overlayIn 0.22s ease; }
+        @keyframes overlayIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
         .modal {
-            background: rgba(45,45,45,0.95);
-            padding: 16px 18px;
-            border-radius: 10px;
-            text-align: left;
+            background: linear-gradient(180deg, #242c47, #161c31 70%);
+            border: 1px solid rgba(240, 199, 110, 0.3);
+            padding: 26px 30px;
+            border-radius: 18px;
+            text-align: center;
             min-width: 260px;
-            box-shadow: 0 8px 28px rgba(0,0,0,0.45);
-            border: 1px solid rgba(255,255,255,0.16);
+            max-width: 92vw;
+            box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8);
         }
         .modal h2 {
             font-size: 20px;
-            margin-bottom: 12px;
-            color: #f0d060;
+            margin-bottom: 16px;
+            color: #f6d98b;
+            letter-spacing: 0.06em;
+            line-height: 1.5;
         }
         .modal button {
-            padding: 8px 16px;
-            font-size: 14px;
-            background: #4CAF50;
-            color: #fff;
+            padding: 10px 26px;
+            font-size: 14.5px;
             border: none;
-            border-radius: 6px;
+            border-radius: 11px;
             cursor: pointer;
             font-family: inherit;
-            font-weight: bold;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(180deg, #3cd792, #1eaf77);
+            box-shadow: 0 8px 20px -8px rgba(38, 205, 146, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+            transition: transform 0.12s, filter 0.2s;
         }
-        .modal button:hover { background: #43a047; }
+        .modal button:hover { filter: brightness(1.07); }
+        .modal button:active { transform: scale(0.96); }
+
+        button:focus-visible,
+        input:focus-visible,
+        .adv-toggle:focus-visible {
+            outline: 2px solid rgba(243, 207, 122, 0.7);
+            outline-offset: 2px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #status::before { animation: none; }
+            * { transition: none !important; animation: none !important; }
+        }
     </style>
 </head>
 <body>
 
-<h1>夹 挑 棋</h1>
+<h1>夹挑棋</h1>
+<p id="subtitle">夹挑连锁 · 方寸制胜</p>
 
 <div class="score-bar">
     <div class="side" id="blackSide">
@@ -219,7 +392,9 @@
     <div class="online-tip" id="onlineTip">未连接</div>
 </div>
 
-<canvas id="gameCanvas"></canvas>
+<div class="board-frame">
+    <canvas id="gameCanvas"></canvas>
+</div>
 
 <div class="btn-row">
     <button id="restartBtn">重新开始</button>
@@ -272,8 +447,8 @@ const advToggleEl = document.getElementById('advToggle');
 const dpr = window.devicePixelRatio || 1;
 canvas.width = CANVAS_CSS * dpr;
 canvas.height = CANVAS_CSS * dpr;
-canvas.style.width = CANVAS_CSS + 'px';
-canvas.style.height = CANVAS_CSS + 'px';
+// 显示尺寸交由 CSS（#gameCanvas）控制：小屏自动等比缩小。
+// 点击坐标换算始终基于 getBoundingClientRect()，缩放后依旧精确。
 ctx.scale(dpr, dpr);
 
 // ========== Lines (game coords: y=0 bottom, y=4 top) ==========
@@ -1066,18 +1241,33 @@ function drawWinAnimation() {
 function draw() {
     const W = CANVAS_CSS, H = CANVAS_CSS;
 
-    // Background
-    ctx.fillStyle = '#dcb35c';
+    // 棋盘底色：暖琥珀渐变 + 细腻木纹 + 四周暗角聚焦中心
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#eccd93');
+    bg.addColorStop(0.55, '#ddb166');
+    bg.addColorStop(1, '#c28f3e');
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // Subtle wood grain effect
-    ctx.fillStyle = 'rgba(180, 140, 60, 0.15)';
+    // 纵向木纹（浅亮纹 + 深细纹交替）
+    ctx.fillStyle = 'rgba(255, 240, 200, 0.16)';
     for (let i = 0; i < W; i += 6) {
         ctx.fillRect(i, 0, 2, H);
     }
+    ctx.fillStyle = 'rgba(118, 76, 28, 0.12)';
+    for (let i = 3; i < W; i += 6) {
+        ctx.fillRect(i, 0, 1, H);
+    }
 
-    ctx.strokeStyle = '#5a4a2a';
-    ctx.lineWidth = 1.5;
+    // 暗角晕影
+    const vg = ctx.createRadialGradient(W / 2, H / 2, W * 0.26, W / 2, H / 2, W * 0.75);
+    vg.addColorStop(0, 'rgba(70, 40, 8, 0)');
+    vg.addColorStop(1, 'rgba(64, 34, 6, 0.3)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = '#56421f';
+    ctx.lineWidth = 1.4;
     ctx.lineCap = 'round';
 
     // Horizontal lines
@@ -1116,7 +1306,7 @@ function draw() {
             const [sx, sy] = g2s(x, y);
             ctx.beginPath();
             ctx.arc(sx, sy, 3, 0, Math.PI * 2);
-            ctx.fillStyle = '#6b5b3a';
+            ctx.fillStyle = '#6d5026';
             ctx.fill();
         }
     }
@@ -1126,9 +1316,9 @@ function draw() {
         const [sx, sy] = g2s(mx, my);
         ctx.beginPath();
         ctx.arc(sx, sy, 12, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(76, 175, 80, 0.45)';
+        ctx.fillStyle = 'rgba(34, 168, 112, 0.5)';
         ctx.fill();
-        ctx.strokeStyle = 'rgba(76, 175, 80, 0.8)';
+        ctx.strokeStyle = 'rgba(20, 138, 92, 0.95)';
         ctx.lineWidth = 2;
         ctx.stroke();
     }
@@ -1141,14 +1331,14 @@ function draw() {
             // Hovering own piece
             ctx.beginPath();
             ctx.arc(sx, sy, RADIUS + 6, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(255, 200, 0, 0.35)';
+            ctx.strokeStyle = 'rgba(255, 214, 102, 0.5)';
             ctx.lineWidth = 3;
             ctx.stroke();
         } else if (board[hx][hy] === EMPTY && validMoves.some(([vx, vy]) => vx === hx && vy === hy)) {
             // Hovering valid target
             ctx.beginPath();
             ctx.arc(sx, sy, 14, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(76, 175, 80, 0.7)';
+            ctx.fillStyle = 'rgba(34, 168, 112, 0.75)';
             ctx.fill();
         }
     }
@@ -1161,38 +1351,55 @@ function draw() {
             const piece = board[x][y];
             const anim = getAnimTarget(x, y);
 
+            // 棋子投影（落在棋盘格上）
+            ctx.fillStyle = 'rgba(58, 34, 8, 0.26)';
+            ctx.beginPath();
+            ctx.ellipse(sx, sy + RADIUS * 0.6, RADIUS * 0.78, RADIUS * 0.3, 0, 0, Math.PI * 2);
+            ctx.fill();
+
             ctx.beginPath();
             ctx.arc(sx, sy, RADIUS, 0, Math.PI * 2);
 
             if (anim && anim.type === 'gray-flash' && anim.grayOn) {
-                const grad = ctx.createRadialGradient(sx - 5, sy - 5, 2, sx, sy, RADIUS);
-                grad.addColorStop(0, '#b5b5b5');
-                grad.addColorStop(1, '#6e6e6e');
+                const grad = ctx.createRadialGradient(sx - 6, sy - 6, 2, sx, sy, RADIUS);
+                grad.addColorStop(0, '#c9c9cf');
+                grad.addColorStop(1, '#74747e');
                 ctx.fillStyle = grad;
                 ctx.fill();
-                ctx.strokeStyle = '#555';
+                ctx.strokeStyle = '#52525a';
                 ctx.lineWidth = 2;
                 ctx.stroke();
             } else if (piece === BLACK) {
-                // Black piece with gradient
-                const grad = ctx.createRadialGradient(sx - 5, sy - 5, 2, sx, sy, RADIUS);
-                grad.addColorStop(0, '#555');
-                grad.addColorStop(1, '#111');
+                // 黑子：近黑渐变 + 顶部釉光
+                const grad = ctx.createRadialGradient(sx - 6, sy - 6, 2, sx, sy, RADIUS);
+                grad.addColorStop(0, '#5f5f6a');
+                grad.addColorStop(0.45, '#26262d');
+                grad.addColorStop(1, '#0d0d12');
                 ctx.fillStyle = grad;
                 ctx.fill();
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 1;
+                ctx.strokeStyle = '#050508';
+                ctx.lineWidth = 1.4;
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(sx, sy, RADIUS - 5.5, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.lineWidth = 1.2;
                 ctx.stroke();
             } else {
-                // White piece with gradient
-                const grad = ctx.createRadialGradient(sx - 5, sy - 5, 2, sx, sy, RADIUS);
-                grad.addColorStop(0, '#fff');
-                grad.addColorStop(1, '#ccc');
+                // 白子：象牙白渐变 + 高光点
+                const grad = ctx.createRadialGradient(sx - 6, sy - 6, 2, sx, sy, RADIUS);
+                grad.addColorStop(0, '#ffffff');
+                grad.addColorStop(0.6, '#f2ecdc');
+                grad.addColorStop(1, '#cfc6ac');
                 ctx.fillStyle = grad;
                 ctx.fill();
-                ctx.strokeStyle = '#888';
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#8f8878';
+                ctx.lineWidth = 1.6;
                 ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(sx - RADIUS * 0.32, sy - RADIUS * 0.34, 3.4, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+                ctx.fill();
             }
 
             if (anim && anim.type === 'converted') {
@@ -1218,7 +1425,7 @@ function draw() {
         const [sx, sy] = g2s(selPiece[0], selPiece[1]);
         ctx.beginPath();
         ctx.arc(sx, sy, RADIUS + 5, 0, Math.PI * 2);
-        ctx.strokeStyle = '#ff9800';
+        ctx.strokeStyle = '#f2b93c';
         ctx.lineWidth = 3;
         ctx.stroke();
     }
