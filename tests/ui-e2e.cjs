@@ -260,6 +260,23 @@ async function main() {
             await clickById(cdp, 'tutSkipBtn');
         });
 
+        // ---------- B1 账号：注册 / 登录态 / 退出（M2a） ----------
+        step('B1 游客注册账号并退出', async () => {
+            await load(freshUrl('b1'));
+            const user = 'ui_' + Date.now().toString(36);
+            await clickById(cdp, 'profileBtn');
+            await waitFor(cdp, `document.getElementById('profileOverlay').classList.contains('show')`, 5000, '资料弹窗');
+            await setValue(cdp, 'acctUser', user);
+            await setValue(cdp, 'acctPass', 'secret123');
+            await clickById(cdp, 'acctUpgradeBtn');
+            await waitFor(cdp, `document.getElementById('accountState').textContent.includes('已登录')`, 8000, '注册后登录态');
+            assert.ok((await cdp.evalJS(`document.getElementById('accountState').textContent`)).includes(user), '显示用户名');
+            // 退出登录 → 回到游客
+            await clickById(cdp, 'acctLogoutBtn');
+            await waitFor(cdp, `!document.getElementById('accountState').textContent.includes('已登录')`, 8000, '退出后回游客');
+            await clickById(cdp, 'profileCancelBtn');
+        });
+
         // ---------- 汇总 ----------
         console.log('\n===== M1 UI E2E =====');
         for (const s of steps) {

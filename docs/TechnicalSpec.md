@@ -184,7 +184,38 @@
 
 ---
 
-## 10. 后续可扩展点
+## 10. 平台化层（M2，开发中，feat/m2）
+
+### 10.1 服务架构
+
+- `server.js`：单端口全功能入口（HTTP 静态 + REST `/api` + WebSocket `/ws`），启动时打开 SQLite
+- `shared/app.js`：应用工厂 `createApp({store, staticDir})`，便于测试进程内创建实例；内含 REST 路由、房间/对局逻辑与对局落库
+- `shared/db.js`：better-sqlite3 数据层，表：`players` / `sessions` / `games` / `moves`
+- `online-server.js` 保留为旧版 WS-only 服务（历史兼容，新功能以 server.js 为准）
+
+### 10.2 REST 接口
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | /api/guest | 创建游客身份，返回 token + player |
+| POST | /api/register | 游客升级账号（username + 密码盐哈希） |
+| POST | /api/login | 登录换新 token |
+| POST | /api/logout | 注销会话 |
+| GET | /api/me | 当前身份（Bearer token） |
+| PATCH | /api/profile | 更新 nick / avatar |
+| GET | /api/games | 对局列表（默认 50） |
+| GET | /api/games/:id | 对局详情 + moves（回放数据源） |
+
+### 10.3 在线对局存档
+
+- WebSocket `join` 消息携带 `token`，服务端校验身份并记录 `playerId`（黑/白）
+- 两名玩家到齐后自动创建 `games` 记录；每一步走子写入 `moves`
+- 结束时机：吃光 / 无路可走 / 认输 / 重开 / 玩家离开 分别落 `result + reason`
+- 前端首次进入自动 `POST /api/guest` 保持游客身份，资料保存双向同步（离线降级为本地）
+
+---
+
+## 11. 后续可扩展点
 
 - AI 难度分级（随机/启发式/搜索）
 - 在线断线重连与局面恢复

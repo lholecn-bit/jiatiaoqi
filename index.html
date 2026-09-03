@@ -476,6 +476,29 @@
         }
         .btn-plain:hover { background: rgba(255, 255, 255, 0.08); }
 
+        /* ===== M2：账号面板 ===== */
+        .account-pane { margin-top: 16px; }
+        .account-pane hr {
+            border: 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            margin: 0 0 12px;
+        }
+        .account-state {
+            font-size: 12px;
+            color: #93a0b8;
+            margin-bottom: 10px;
+            line-height: 1.6;
+            min-height: 16px;
+        }
+        .account-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .account-row input { padding: 8px 10px; font-size: 13px; }
+        [data-theme="light"] .account-pane hr { border-top-color: rgba(140, 110, 60, 0.25); }
+        [data-theme="light"] .account-state { color: #8a7c60; }
+
         /* ===== 玩法教程 ===== */
         .tutorial-modal { width: min(480px, 92vw); }
         .tut-body {
@@ -731,6 +754,19 @@
             <button id="profileCancelBtn" class="btn-plain" type="button">取 消</button>
             <button id="profileSaveBtn" type="button">保 存</button>
         </div>
+        <div class="account-pane">
+            <hr />
+            <div id="accountState" class="account-state">正在连接服务…</div>
+            <div class="account-row">
+                <input id="acctUser" maxlength="20" placeholder="用户名（2-20 字符）" autocomplete="username" />
+                <input id="acctPass" type="password" maxlength="64" placeholder="密码（≥6 位）" autocomplete="current-password" />
+            </div>
+            <div class="modal-actions">
+                <button id="acctUpgradeBtn" class="btn-plain" type="button">注册并保存资料</button>
+                <button id="acctLoginBtn" class="btn-plain" type="button">登 录</button>
+                <button id="acctLogoutBtn" class="btn-plain" type="button" style="display:none">退出登录</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -827,6 +863,18 @@ const tutNextBtnEl = document.getElementById('tutNextBtn');
 const tutSkipBtnEl = document.getElementById('tutSkipBtn');
 const tutorialBtnEl = document.getElementById('tutorialBtn');
 const undoBtnEl = document.getElementById('undoBtn');
+
+// M2：账号 / 云端身份
+const TOKEN_KEY = 'jtq-token';
+const acctUserEl = document.getElementById('acctUser');
+const acctPassEl = document.getElementById('acctPass');
+const acctStateEl = document.getElementById('accountState');
+const acctUpgradeBtnEl = document.getElementById('acctUpgradeBtn');
+const acctLoginBtnEl = document.getElementById('acctLoginBtn');
+const acctLogoutBtnEl = document.getElementById('acctLogoutBtn');
+let currentToken = null;
+let accountInfo = null;
+try { currentToken = localStorage.getItem(TOKEN_KEY); } catch (e) {}
 
 // Hi-DPI
 const dpr = window.devicePixelRatio || 1;
@@ -1057,7 +1105,7 @@ function connectOnlineRoom() {
         if (onlineSocket !== socket) return;
         setOnlineConnected(true);
         setOnlineTip('已连接服务器，加入房间中...');
-        sendOnlineMessage({ type: 'join', roomId });
+        sendOnlineMessage({ type: 'join', roomId, token: currentToken || '' });
     };
 
     socket.onmessage = (event) => {
@@ -1194,14 +1242,142 @@ function openProfileModal() {
         avatarGridEl.appendChild(b);
     });
     openOverlay(profileOverlayEl);
+    renderAccount();
 }
 
-function saveProfile() {
+async function saveProfile() {
     profile.avatar = tempAvatar;
     profile.name = nickInputEl.value.trim().slice(0, 14);
     try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch (e) {}
     renderProfile();
+    // 云端同步（失败时静默，保留本地）
+    if (currentToken) {
+        const r = await apiCall('/api/profile', { method: 'PATCH', body: { nick: profile.name, avatar: profile.avatar } });
+        if (r.ok && r.data.player) {
+            profile.avatar = Math.min(Math.max(Number(r.data.player.avatar) || 0, 0), AVATARS.length - 1);
+            profile.name = r.data.player.nick || '';
+            renderProfile();
+        }
+    }
     closeOverlay(profileOverlayEl);
+}
+
+// ========== M2：账号 / 云端身份 ==========
+async function apiCall(pathname, opts = {}) {
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (currentToken) headers.Authorization = 'Bearer ' + currentToken;
+        const res = await fetch(pathname, {
+            method: opts.method || 'GET',
+            headers,
+            body: opts.body ? JSON.stringify(opts.body) : undefined,
+        });
+        let data = {};
+        try { data = await res.json(); } catch (e) {}
+        return { ok: res.ok, status: res.status, data };
+    } catch (e) {
+        return { ok: false, status: 0, offline: true, data: {} };
+    }
+}
+
+function saveToken(t) {
+    currentToken = t || null;
+    try {
+        if (currentToken) localStorage.setItem(TOKEN_KEY, currentToken);
+        else localStorage.removeItem(TOKEN_KEY);
+    } catch (e) {}
+}
+
+async function ensureIdentity() {
+    if (currentToken) return true;
+    const r = await apiCall('/api/guest', { method: 'POST' });
+    if (r.ok && r.data.token) {
+        saveToken(r.data.token);
+        return true;
+    }
+    return false;
+}
+
+async function syncCloudProfile() {
+    if (!currentToken) return;
+    const r = await apiCall('/api/me');
+    if (!r.ok) {
+        if (r.status === 401) {
+            saveToken(null);
+            if (await ensureIdentity()) return syncCloudProfile();
+        }
+        return;
+    }
+    const me = r.data.player || {};
+    // 账号身份，或服务器已有资料时，以服务器为准；纯新游客保留本地
+    if (me.kind === 'account' || (me.nick || '') !== '' || Number(me.avatar || 0) > 0) {
+        profile.name = me.nick || '';
+        profile.avatar = Math.min(Math.max(Number(me.avatar) || 0, 0), AVATARS.length - 1);
+        try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch (e) {}
+        renderProfile();
+    }
+    accountInfo = me;
+    renderAccount();
+}
+
+function renderAccount() {
+    if (!acctStateEl) return;
+    const a = accountInfo;
+    if (a && a.kind === 'account') {
+        acctStateEl.textContent = '已登录：@' + a.username + '（昵称/头像云端同步）';
+        acctLogoutBtnEl.style.display = '';
+    } else {
+        acctStateEl.textContent = currentToken
+            ? '游客模式：资料保存在本机与云端，可注册账号跨设备保留'
+            : '未连接服务：仅本机保存（离线可用）';
+        acctLogoutBtnEl.style.display = 'none';
+    }
+}
+
+function acctMsg(text) {
+    if (acctStateEl) acctStateEl.textContent = text;
+}
+
+async function acctRegister() {
+    const username = acctUserEl.value.trim();
+    const password = acctPassEl.value;
+    if (!username || password.length < 6) {
+        acctMsg('请填写用户名和至少 6 位密码');
+        return;
+    }
+    if (!currentToken && !(await ensureIdentity())) {
+        acctMsg('连接服务失败，请检查网络');
+        return;
+    }
+    const r = await apiCall('/api/register', {
+        method: 'POST',
+        body: { guestToken: currentToken, username, password },
+    });
+    if (!r.ok) { acctMsg(r.data.message || '注册失败'); return; }
+    acctMsg('注册成功，资料已保存到账号');
+    await syncCloudProfile();
+}
+
+async function acctLogin() {
+    const username = acctUserEl.value.trim();
+    const password = acctPassEl.value;
+    if (!username || !password) { acctMsg('请输入用户名与密码'); return; }
+    const r = await apiCall('/api/login', {
+        method: 'POST',
+        body: { username, password },
+    });
+    if (!r.ok) { acctMsg(r.data.message || '登录失败'); return; }
+    saveToken(r.data.token);
+    acctMsg('登录成功');
+    await syncCloudProfile();
+}
+
+async function acctLogout() {
+    if (currentToken) await apiCall('/api/logout', { method: 'POST' });
+    saveToken(null);
+    accountInfo = null;
+    acctMsg('已退出登录');
+    if (await ensureIdentity()) await syncCloudProfile();
 }
 
 // ========== M1：玩法教程 ==========
@@ -2262,6 +2438,12 @@ tutNextBtnEl.addEventListener('click', () => tutorialStep(1));
 tutSkipBtnEl.addEventListener('click', closeTutorial);
 undoBtnEl.addEventListener('click', undoLastMove);
 
+// ========== M2 事件 ==========
+acctUpgradeBtnEl.addEventListener('click', acctRegister);
+acctLoginBtnEl.addEventListener('click', acctLogin);
+acctLogoutBtnEl.addEventListener('click', acctLogout);
+acctPassEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') acctLogin(); });
+
 // ========== Init ==========
 const appVersionEl = document.getElementById('appVersion');
 if (appVersionEl) appVersionEl.textContent = '夹挑棋 v' + APP_VERSION;
@@ -2274,6 +2456,12 @@ setOnlineConnected(false);
 setOnlineTip('未连接');
 resetBoard();
 syncUndoBtn();
+// M2：启动时确保游客身份并从云端拉取资料
+(async () => {
+    await ensureIdentity();
+    await syncCloudProfile();
+    renderAccount();
+})();
 // 首次进入自动弹出玩法教程（之后可点底部「玩法教程」再次学习）
 let tutDone = false;
 try { tutDone = !!localStorage.getItem(TUT_KEY); } catch (e) {}

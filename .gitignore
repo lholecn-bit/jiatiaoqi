@@ -32,3 +32,9 @@ server.log
 
 # 服务 PID 文件
 .server.pid
+
+# npm 本地缓存
+.npmcache/
+
+# 数据库文件
+*.db
