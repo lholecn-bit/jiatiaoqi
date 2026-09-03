@@ -346,6 +346,14 @@
         .modal button:hover { filter: brightness(1.07); }
         .modal button:active { transform: scale(0.96); }
 
+        /* 版本号（页面底部） */
+        .app-version {
+            margin-top: 16px;
+            font-size: 12px;
+            letter-spacing: 0.14em;
+            color: #6b7693;
+        }
+
         button:focus-visible,
         input:focus-visible,
         .adv-toggle:focus-visible {
@@ -401,6 +409,8 @@
     <button id="surrenderBtn">认 输</button>
 </div>
 
+<footer id="appVersion" class="app-version"></footer>
+
 <div id="overlay">
     <div class="modal">
         <h2 id="modalTitle"></h2>
@@ -421,6 +431,9 @@ const ANIM_FLASH_COUNT = 6;
 const ANIM_FLASH_INTERVAL = 200;
 const ANIM_CONVERT_HOLD = 520;
 const ANIM_STEP_GAP = 360;
+
+// 页面版本号：发版时与 package.json 的 version 同步修改（页面底部展示）
+const APP_VERSION = '1.1.0';
 
 // ========== DOM ==========
 const canvas = document.getElementById('gameCanvas');
@@ -1583,6 +1596,8 @@ advToggleEl.addEventListener('click', () => {
 });
 
 // ========== Init ==========
+const appVersionEl = document.getElementById('appVersion');
+if (appVersionEl) appVersionEl.textContent = '夹挑棋 v' + APP_VERSION;
 buildLines();
 updateModeUI();
 setOnlineConnected(false);

@@ -44,3 +44,4 @@
 - 修改代码行为时，同步更新 [TechnicalSpec.md](TechnicalSpec.md) 对应章节
 - 调整游戏规则或界面时，同步更新 [GameDesign.md](GameDesign.md) 与 [ProductRequirements.md](ProductRequirements.md)
 - 改动部署方式时，同步更新 [DEPLOY.md](DEPLOY.md) 与根目录 `deploy.sh`
+- 发布新版本时，同步 `index.html` 的 `APP_VERSION` 常量与 `package.json` / `package-lock.json` 的 `version` 字段（版本号展示在页面底部，用于核对线上是否最新）
