@@ -12,6 +12,6 @@ module.exports = {
 
     // 上传私钥文件的绝对路径（下载后的 .key 文件存放位置）
     // 建议放在项目外的安全目录，例如：
-    //   '/home/yourname/keys/jiaotiaoqi.key'
+    //   '/home/yourname/keys/jiatiaoqi.key'
     privateKeyPath: '/ABSOLUTE/PATH/TO/your-private.key',
 };

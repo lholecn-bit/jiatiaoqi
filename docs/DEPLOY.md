@@ -332,3 +332,46 @@ UPDATE_PULL=0 ./update.sh                 # 跳过 git pull（已手动拉过）
 流程：`git pull` → 按形态让代码生效（server.js 重启 / `pm2 restart` / `rsync` 到服务目录 + nginx reload）→ 自动 `curl` 校验线上页面 `APP_VERSION` 与仓库是否一致，不一致则退出非 0 提醒。
 
 > 说明：update.sh 需在**带 `.git` 的代码仓库**里运行；若线上由 deploy.sh 副本（如 `/srv/jiatiaoqi`）提供页面，用 `UPDATE_TO` 指定该目录（脚本会 rsync 并排除 .git/脚本/日志等）。
+
+---
+
+## 10. 命名统一迁移（旧拼写 jiaotiaoqi → 规范 jiatiaoqi，可选）
+
+历史版本（含 deploy.sh 早期）把项目名写作 `jiaotiaoqi`（多一个 o）。代码库已全部统一为
+**jiatiaoqi**（GitHub 仓库、package.json、minigame 均一致）。若你的服务器仍是旧拼写部署，
+可按下述任选其一处理。
+
+### 方式一：不迁移（最省事）
+
+继续用旧目录/旧进程名，update.sh 跑的时候带上覆盖参数即可：
+
+```bash
+UPDATE_TO=/srv/jiaotiaoqi PM2_NAME=jiaotiaoqi-ws ./update.sh
+```
+
+### 方式二：迁移到规范拼写（推荐抽空执行）
+
+```bash
+# 1) 停旧进程与服务，目录改名
+pm2 delete jiatiaoqi-ws 2>/dev/null; pm2 delete jiaotiaoqi-ws
+systemctl stop nginx
+mv /srv/jiaotiaoqi /srv/jiatiaoqi
+
+# 2) nginx 配置改名 + 内容替换
+cd /etc/nginx
+mv sites-available/jiaotiaoqi.conf sites-available/jiatiaoqi.conf
+mv sites-enabled/jiaotiaoqi.conf sites-enabled/jiatiaoqi.conf
+sed -i 's#/srv/jiaotiaoqi#/srv/jiatiaoqi#g' sites-available/jiatiaoqi.conf
+nginx -t && systemctl start nginx
+
+# 3) 用新拼写重拉 PM2 服务（目录随 mv 一并迁移）
+cd /srv/jiatiaoqi && npm install --production
+PORT=8080 pm2 start online-server.js --name jiatiaoqi-ws && pm2 save
+
+# 4) 之后正常流程
+cd ~/jiatiaoqi && git pull && UPDATE_TO=/srv/jiatiaoqi ./update.sh
+```
+
+> minigame（微信小游戏）：本地 `projectname` / npm 包名也已统一为 `jiatiaoqi`；
+> 这只影响本地开发者工具显示与包名，**不影响**已在微信后台注册的 AppID/项目。
+> 若你想让微信后台显示名也同步，可在后台手动改名（游戏名本身是中文「夹挑棋」）。

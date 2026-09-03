@@ -1,6 +1,6 @@
 {
   "miniprogramRoot": "./",
-  "projectname": "jiaotiaoqi",
+  "projectname": "jiatiaoqi",
   "description": "夹挑棋 - 5x5 策略棋类",
   "appid": "REPLACE_WITH_YOUR_APPID",
   "setting": {
