@@ -22,6 +22,7 @@
 ### 我要部署
 - **本地运行 / 生产部署（Nginx + PM2）**：[DEPLOY.md](DEPLOY.md)
 - 一键脚本：[`../deploy.sh`](../deploy.sh)
+- 本机/局域网一键启停：[`../start-server.sh`](../start-server.sh)、[`../stop-server.sh`](../stop-server.sh)、[`../restart-server.sh`](../restart-server.sh)（见 DEPLOY.md §3.4）
 
 ### 我要上架微信小游戏
 - **小游戏代码与运行**：[`../minigame/README.md`](../minigame/README.md)

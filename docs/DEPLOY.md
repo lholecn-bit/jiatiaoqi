@@ -76,6 +76,33 @@ npm run start:online
 > 服务器地址**无需手动填写**：前端会从当前页面 URL 自动推导（同源 `/ws`）。
 > 仅当 WS 服务不在同一台机器时才需要点「高级设置」展开手动填写。
 
+### 3.4 单端口合并服务（推荐：本机 / 局域网，含启停脚本）
+
+不想开两个进程时，可用 `server.js` 把静态页面与 WebSocket 合并到**同一个端口**（默认 8080），适合本机双开浏览器、局域网对战，以及 Tailscale Funnel / Cloudflare Tunnel 等单端口隧道方案。
+
+项目根目录提供一键启停脚本（Linux/macOS），自动定位进程、**不依赖写死的 PID**：
+
+```bash
+./start-server.sh      # 启动（HTTP + WebSocket，默认端口 8080）
+./stop-server.sh       # 停止
+./restart-server.sh    # 重启
+PORT=9000 ./start-server.sh   # 自定义端口（启停需保持一致）
+```
+
+等价的手动方式：
+
+```bash
+# 启动（后台运行，日志写入 server.log）
+nohup node server.js > server.log 2>&1 &
+
+# 停止（按进程名/端口定位，不要依赖固定 PID）
+pkill -f "node server.js"        # 或 kill $(cat .server.pid)
+```
+
+- 日志：`server.log`（`tail -f server.log` 跟踪）
+- 进程记录：`.server.pid`（由 `start-server.sh` 自动写入/清理，已加入 `.gitignore`）
+- **何时需要重启**：只有改动服务端代码（`server.js` / `online-server.js`）才需重启；改动前端 `index.html` 直接刷新浏览器即可（服务端每次请求实时读文件）。
+
 ---
 
 ## 4. 生产部署（推荐：Nginx + PM2）
@@ -193,11 +220,26 @@ sudo systemctl reload nginx
 - 当前版本为无状态房间，刷新会断开重连。
 - 断线后重新输入房间号连接即可。
 
+### Q4：如何停止 / 重启服务？
+
+- **本机 server.js（单端口）**：`./stop-server.sh` / `./restart-server.sh`（见 3.4）
+- **生产 PM2**：`pm2 restart jiaotiaoqi-ws` / `pm2 stop jiaotiaoqi-ws`（见 4.2）
+- 前端改动无需重启服务，刷新浏览器即生效。
+
 ---
 
 ## 7. 一键启动（本地）
 
-你可以开两个终端分别执行：
+### 方式一：单端口（推荐）
+
+```bash
+cd /home/zhouanchao/Project/ChessGame
+./start-server.sh          # 或 PORT=xxxx ./start-server.sh
+```
+
+访问 http://127.0.0.1:8080。
+
+### 方式二：双进程（静态页 + WS 分开）
 
 终端 A：
 
