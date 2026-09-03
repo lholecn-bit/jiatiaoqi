@@ -26,3 +26,6 @@ preview.png
 # 环境文件
 .env
 .env.local
+
+# 运行日志
+server.log
