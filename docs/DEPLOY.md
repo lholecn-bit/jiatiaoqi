@@ -105,7 +105,7 @@ pkill -f "node server.js"        # 或 kill $(cat .server.pid)
 
 > ⚠️ **重要**：以上启停脚本只管理 `server.js`（单端口合并服务）。
 > 若该端口正被 **PM2 生产部署的 `online-server.js`** 占用（deploy.sh 架构），
-> 请使用 `pm2 restart jiaotiaoqi-ws` / `pm2 stop jiaotiaoqi-ws`，
+> 请使用 `pm2 restart jiatiaoqi-ws` / `pm2 stop jiatiaoqi-ws`，
 > 两种形态共用 8080，不要混用，否则脚本会提示“端口被其它程序占用”。
 
 ---
@@ -118,12 +118,12 @@ pkill -f "node server.js"        # 或 kill $(cat .server.pid)
 
 将项目放到例如：
 
-- `/srv/jiaotiaoqi`
+- `/srv/jiatiaoqi`
 
 并安装依赖：
 
 ```bash
-cd /srv/jiaotiaoqi
+cd /srv/jiatiaoqi
 npm install --production
 ```
 
@@ -138,8 +138,8 @@ npm i -g pm2
 启动服务：
 
 ```bash
-cd /srv/jiaotiaoqi
-pm2 start online-server.js --name jiaotiaoqi-ws
+cd /srv/jiatiaoqi
+pm2 start online-server.js --name jiatiaoqi-ws
 pm2 save
 pm2 startup
 ```
@@ -148,7 +148,7 @@ pm2 startup
 
 ```bash
 pm2 ls
-pm2 logs jiaotiaoqi-ws
+pm2 logs jiatiaoqi-ws
 ```
 
 ### 4.3 Nginx 配置（静态页面 + WebSocket 反向代理）
@@ -160,7 +160,7 @@ server {
     listen 80;
     server_name game.example.com;
 
-    root /srv/jiaotiaoqi;
+    root /srv/jiatiaoqi;
     index index.html;
 
     location / {
@@ -228,7 +228,7 @@ sudo systemctl reload nginx
 ### Q4：如何停止 / 重启服务？
 
 - **本机 server.js（单端口）**：`./stop-server.sh` / `./restart-server.sh`（见 3.4）
-- **生产 PM2**：`pm2 restart jiaotiaoqi-ws` / `pm2 stop jiaotiaoqi-ws`（见 4.2）
+- **生产 PM2**：`pm2 restart jiatiaoqi-ws` / `pm2 stop jiatiaoqi-ws`（见 4.2）
 - 前端改动无需重启服务，刷新浏览器即生效。
 
 ### Q5：如何确认线上跑的是最新版？
@@ -323,7 +323,7 @@ PORT=9000 npm run start:online
 ```bash
 ./update.sh                               # 自动识别形态并上线
 UPDATE_MODE=server.js ./update.sh         # 显式：单端口 server.js（重启 server.js）
-UPDATE_MODE=pm2       ./update.sh         # 显式：PM2（pm2 restart jiaotiaoqi-ws）
+UPDATE_MODE=pm2       ./update.sh         # 显式：PM2（pm2 restart jiatiaoqi-ws）
 UPDATE_MODE=nginx     ./update.sh         # 显式：Nginx 静态目录（另需 UPDATE_TO）
 UPDATE_TO=/srv/jiatiaoqi ./update.sh      # 线上由 deploy 副本提供时指向服务目录
 UPDATE_PULL=0 ./update.sh                 # 跳过 git pull（已手动拉过）

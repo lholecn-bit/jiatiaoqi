@@ -3,13 +3,13 @@ set -euo pipefail
 
 # 夹挑棋一键部署脚本（Ubuntu/Debian）
 # 用法（推荐）：
-#   sudo bash deploy.sh --domain game.example.com --app-dir /srv/jiaotiaoqi --ws-port 8080 --web-port 80
+#   sudo bash deploy.sh --domain game.example.com --app-dir /srv/jiatiaoqi --ws-port 8080 --web-port 80
 #
 # 开发机本地快速部署：
 #   sudo bash deploy.sh --domain 127.0.0.1 --app-dir /home/$USER/Project/ChessGame
 
 DOMAIN=""
-APP_DIR="/srv/jiaotiaoqi"
+APP_DIR="/srv/jiatiaoqi"
 WS_PORT="8080"
 WEB_PORT="80"
 NODE_MAJOR="20"
@@ -20,7 +20,7 @@ Usage: sudo bash deploy.sh [options]
 
 Options:
   --domain <domain>       站点域名或IP（必填）
-  --app-dir <path>        项目部署目录（默认: /srv/jiaotiaoqi）
+  --app-dir <path>        项目部署目录（默认: /srv/jiatiaoqi）
   --ws-port <port>        WebSocket 服务端口（默认: 8080）
   --web-port <port>       Nginx 监听端口（默认: 80）
   --node-major <version>  Node 大版本（默认: 20）
@@ -111,8 +111,8 @@ echo "[5/8] 安装 Node 依赖..."
 npm install --production
 
 echo "[6/8] 启动 WebSocket 服务..."
-pm2 delete jiaotiaoqi-ws >/dev/null 2>&1 || true
-PORT="$WS_PORT" pm2 start online-server.js --name jiaotiaoqi-ws
+pm2 delete jiatiaoqi-ws >/dev/null 2>&1 || true
+PORT="$WS_PORT" pm2 start online-server.js --name jiatiaoqi-ws
 pm2 save
 
 if command -v systemctl >/dev/null 2>&1; then
@@ -123,7 +123,7 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 echo "[7/8] 生成 Nginx 站点配置..."
-cat > /etc/nginx/sites-available/jiaotiaoqi.conf <<EOF
+cat > /etc/nginx/sites-available/jiatiaoqi.conf <<EOF
 server {
     listen ${WEB_PORT};
     server_name ${DOMAIN};
@@ -145,7 +145,7 @@ server {
 }
 EOF
 
-ln -sf /etc/nginx/sites-available/jiaotiaoqi.conf /etc/nginx/sites-enabled/jiaotiaoqi.conf
+ln -sf /etc/nginx/sites-available/jiatiaoqi.conf /etc/nginx/sites-enabled/jiatiaoqi.conf
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
@@ -164,8 +164,8 @@ cat <<EOF
 
 常用命令：
   pm2 ls
-  pm2 logs jiaotiaoqi-ws
-  pm2 restart jiaotiaoqi-ws
+  pm2 logs jiatiaoqi-ws
+  pm2 restart jiatiaoqi-ws
 
 如果你使用 HTTPS，请将前端在线地址改为：
   wss://${DOMAIN}/ws

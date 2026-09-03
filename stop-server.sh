@@ -102,7 +102,7 @@ if port_in_use; then
     for pid in $(port_pids); do
         echo "        剩余占用者 PID=$pid : $(ps -o args= -p "$pid" 2>/dev/null | head -1)" >&2
     done
-    echo "        若占用者是 online-server.js（PM2/生产部署），请改用 pm2 stop jiaotiaoqi-ws。" >&2
+    echo "        若占用者是 online-server.js（PM2/生产部署），请改用 pm2 stop jiatiaoqi-ws。" >&2
     exit 1
 fi
 

@@ -20,7 +20,7 @@ cd "$REPO_DIR"
 BRANCH="${UPDATE_BRANCH:-main}"
 MODE="${UPDATE_MODE:-auto}"
 SERVED_DIR="${UPDATE_TO:-}"
-PM2_NAME="${PM2_NAME:-jiaotiaoqi-ws}"
+PM2_NAME="${PM2_NAME:-jiatiaoqi-ws}"
 PULL="${UPDATE_PULL:-1}"
 CHECK_URL="${CHECK_URL:-}"        # 默认按形态自动推导
 
