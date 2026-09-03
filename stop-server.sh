@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# 兼容保护：本脚本使用 bash 特性，请用 bash 运行（勿用 sh 执行）
+if [ -z "${BASH_VERSION:-}" ]; then
+    echo "[error] 请用 bash 运行本脚本：bash $0（或直接执行 ./$(basename "$0")）" >&2
+    exit 1
+fi
 # ============================================================
 # 夹挑棋 · 停止脚本（Linux/macOS）
 # 停止 server.js（单端口合并服务）。自动定位进程，不依赖写死的 PID。
