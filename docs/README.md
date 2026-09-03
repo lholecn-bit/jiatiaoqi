@@ -39,6 +39,7 @@
 | [TechnicalSpec.md](TechnicalSpec.md) | 开发 | 架构、状态、算法、在线协议、注意事项 |
 | [DEPLOY.md](DEPLOY.md) | 运维/开发 | 本地与生产部署、端口、Nginx 配置 |
 | [MinigamePublish.md](MinigamePublish.md) | 运营/开发 | 微信小游戏上架：主体、软著、类目、广告位、审核 |
+| [ROADMAP.md](ROADMAP.md) | 全员 | 功能规划（Backlog）：待开发需求清单（暂不开发） |
 
 ## 维护约定
 
