@@ -38,3 +38,5 @@ server.log
 
 # 数据库文件
 *.db
+*.db-shm
+*.db-wal
