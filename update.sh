@@ -122,7 +122,7 @@ case "$MODE" in
         echo "[update] 同步代码到服务目录 $SERVED_DIR ..."
         rsync -a --delete \
             --exclude ".git" --exclude "node_modules" --exclude "archive" \
-            --exclude "docs" --exclude "patent" --exclude "minigame" \
+            --exclude "docs" --exclude "patent" --exclude "minigame" --exclude "tests" \
             --exclude "preview.html" --exclude "electron-main.js" --exclude "build" \
             --exclude ".server.pid" --exclude "server.log" --exclude "*.sh" \
             "$REPO_DIR/" "$SERVED_DIR/"

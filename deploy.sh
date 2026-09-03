@@ -105,6 +105,7 @@ rsync -a --delete \
   --exclude "docs" \
   --exclude "patent" \
   --exclude "minigame" \
+  --exclude "tests" \
   --exclude "preview.html" \
   --exclude "electron-main.js" \
   --exclude "build" \
