@@ -8,6 +8,7 @@
   "main": "electron-main.js",
   "scripts": {
     "start:online": "node online-server.js",
+    "test": "bash tests/run-tests.sh",
     "desktop": "electron . --no-sandbox",
     "desktop:start": "electron . --no-sandbox",
     "build:linux": "electron-builder --linux",
