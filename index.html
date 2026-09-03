@@ -1222,8 +1222,9 @@ function loadProfile() {
                 localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); // 立即回写，迁移只跑一次
             }
         } else {
-            // 游客模式：每次进入都随机生成「A的B+生肖」名号，仅存内存不落盘。
+            // 游客模式：头像与名号都随机生成，仅存内存不落盘。
             // 待后续接入数据库/账号体系后再做持久化。
+            profile.avatar = Math.floor(Math.random() * AVATARS.length);
             profile.name = randomGuestName(profile.avatar);
         }
     } catch (e) {}
