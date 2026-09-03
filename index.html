@@ -423,13 +423,18 @@
             grid-template-columns: repeat(6, 1fr);
             gap: 8px;
             margin: 6px 0 14px;
+            width: 340px;               /* 桌面端固定舒适宽度（手机端由媒体查询改 100%） */
+            max-width: 100%;
         }
         .avatar-grid button {
+            padding: 0;                 /* 关键：覆盖 .modal button 继承的 10px 26px，否则窄屏被撑爆溢出 */
+            min-width: 0;
             aspect-ratio: 1;
             border-radius: 50%;
             border: 2px solid rgba(255, 255, 255, 0.14);
             background: rgba(255, 255, 255, 0.06);
             font-size: 22px;
+            line-height: 1;
             cursor: pointer;
             transition: transform 0.12s, border-color 0.15s;
         }
@@ -437,6 +442,18 @@
         .avatar-grid button.selected {
             border-color: #f2c14e;
             box-shadow: 0 0 0 2px rgba(242, 193, 78, 0.35);
+        }
+        /* 窄屏（手机）：头像改 4 列，单格更大更好点按；弹窗拉满宽 */
+        @media (max-width: 430px) {
+            .modal {
+                width: min(92vw, 420px);
+            }
+            .avatar-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+                width: 100%;
+            }
+            .avatar-grid button { font-size: 24px; }
         }
         .modal input {
             width: 100%;
