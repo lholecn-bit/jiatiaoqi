@@ -834,6 +834,11 @@ function randomGuestName(avatarIndex) {
     return a + '的' + b + z;
 }
 
+// 是否仍是自动生成格式（A的B+生肖）：换头像时此类名字的后缀生肖跟随新头像
+function isAutoName(name) {
+    return /^.+的.+[鼠牛虎兔龙蛇马羊猴鸡狗猪]$/.test(name);
+}
+
 // ========== DOM ==========
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -1247,6 +1252,12 @@ function openProfileModal() {
             avatarGridEl.querySelectorAll('button').forEach(x => x.classList.remove('selected'));
             b.classList.add('selected');
             tempAvatar = i;
+            // 若昵称还是自动生成名（A的B+生肖），后缀生肖实时跟随新头像；
+            // 用户自己起的名字不动
+            const curName = nickInputEl.value;
+            if (isAutoName(curName)) {
+                nickInputEl.value = curName.slice(0, -1) + (ZODIAC_NAMES[i] || ZODIAC_NAMES[0]);
+            }
         });
         avatarGridEl.appendChild(b);
     });
