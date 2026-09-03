@@ -36,6 +36,19 @@ npx serve . -l 8765
 
 浏览器访问 → http://127.0.0.1:8765/index.html
 
+### Linux/macOS：单端口服务一键启停（推荐本机/局域网用）
+
+页面与在线对战共用同一端口（默认 8080），自带脚本自动定位进程，不依赖写死的 PID：
+
+```bash
+./start-server.sh      # 启动（HTTP + WebSocket）
+./stop-server.sh       # 停止
+./restart-server.sh    # 重启
+PORT=9000 ./start-server.sh   # 自定义端口（启停需保持一致）
+```
+
+启动后访问 http://127.0.0.1:8080，日志写入 `server.log`。
+
 ### 2. 启动在线对战服务（仅在线模式需要）
 
 ```bash

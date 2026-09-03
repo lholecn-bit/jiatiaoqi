@@ -29,3 +29,6 @@ preview.png
 
 # 运行日志
 server.log
+
+# 服务 PID 文件
+.server.pid
