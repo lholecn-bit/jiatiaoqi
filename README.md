@@ -18,7 +18,7 @@
 
 一键发版 / 一键上线（详见 [`docs/DEPLOY.md`](docs/DEPLOY.md) §9）：
 ```bash
-./release.sh 1.2.0      # ① 开发机：升版本 + 自动提交 + 推送
+./release.sh 1.3.0      # ① 开发机：升版本 + 自动提交 + 推送
 ./update.sh             # ② 服务器：拉取 + 同步/重载 + 校验页面版本
 ```
 
