@@ -301,3 +301,34 @@ PORT=9000 npm run start:online
 前端在线模式地址对应改为：
 
 - `ws://127.0.0.1:9000`
+
+---
+
+## 9. 一键发布 / 一键上线（推荐）
+
+发版与上线各一条命令，避免手动执行一长串操作（升版本、提交、推送、同步、重载、校验）。
+
+### 9.1 发版（开发机/代码仓库目录）
+
+```bash
+./release.sh 1.2.0              # 升版本 + git commit + git push
+./release.sh 1.2.0 --no-push    # 只升版本 + 提交，不推送
+./release.sh 1.2.0 --dry-run    # 只预览会修改哪些文件，不写入
+```
+
+自动把版本号同步到 4 处：`index.html` 的 `APP_VERSION`、`package.json`、`package-lock.json`（根 + 根包）、`README.md`「当前版本」。
+
+### 9.2 上线（服务器代码仓库目录，配 release.sh 使用）
+
+```bash
+./update.sh                               # 自动识别形态并上线
+UPDATE_MODE=server.js ./update.sh         # 显式：单端口 server.js（重启 server.js）
+UPDATE_MODE=pm2       ./update.sh         # 显式：PM2（pm2 restart jiaotiaoqi-ws）
+UPDATE_MODE=nginx     ./update.sh         # 显式：Nginx 静态目录（另需 UPDATE_TO）
+UPDATE_TO=/srv/jiatiaoqi ./update.sh      # 线上由 deploy 副本提供时指向服务目录
+UPDATE_PULL=0 ./update.sh                 # 跳过 git pull（已手动拉过）
+```
+
+流程：`git pull` → 按形态让代码生效（server.js 重启 / `pm2 restart` / `rsync` 到服务目录 + nginx reload）→ 自动 `curl` 校验线上页面 `APP_VERSION` 与仓库是否一致，不一致则退出非 0 提醒。
+
+> 说明：update.sh 需在**带 `.git` 的代码仓库**里运行；若线上由 deploy.sh 副本（如 `/srv/jiatiaoqi`）提供页面，用 `UPDATE_TO` 指定该目录（脚本会 rsync 并排除 .git/脚本/日志等）。

@@ -16,9 +16,16 @@
 
 版本号用于判断浏览器里跑的是否为最新代码——部署后若页面底部版本与仓库不一致，说明线上是旧版本，需重新部署（见 [`docs/DEPLOY.md`](docs/DEPLOY.md)）。
 
-发版时请同步修改以下两处：
+一键发版 / 一键上线（详见 [`docs/DEPLOY.md`](docs/DEPLOY.md) §9）：
+```bash
+./release.sh 1.2.0      # ① 开发机：升版本 + 自动提交 + 推送
+./update.sh             # ② 服务器：拉取 + 同步/重载 + 校验页面版本
+```
+
+手动同步版本号的位置（`release.sh` 会自动改齐）：
 - `index.html` 顶部常量 `APP_VERSION`（权威源，页面底部自动显示）
 - `package.json` / `package-lock.json` 的 `version` 字段
+- `README.md` 本节的「当前版本」
 
 ---
 
