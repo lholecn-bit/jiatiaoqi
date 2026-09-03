@@ -231,6 +231,27 @@ sudo systemctl reload nginx
 - **生产 PM2**：`pm2 restart jiaotiaoqi-ws` / `pm2 stop jiaotiaoqi-ws`（见 4.2）
 - 前端改动无需重启服务，刷新浏览器即生效。
 
+### Q5：如何确认线上跑的是最新版？
+
+页面底部固定展示版本号「夹挑棋 vX.Y.Z」，用于核对线上代码新旧：
+
+1. 打开线上页面，看底部版本号（部署后若还是旧号/看不到，说明是旧代码）
+2. 与仓库当前版本比对：
+   ```bash
+   # 仓库权威版本：index.html 顶部常量
+   grep "APP_VERSION" index.html
+   # 线上版本：
+   curl -s http://你的域名/ | grep -o "app-version"   # 有新页脚说明是新版
+   # 或直接看线上 HTML 里携带的版本常量：
+   curl -s http://你的域名/ | grep -o "APP_VERSION = '[^']*'"
+   ```
+3. 不一致的处理：`git pull` 只是更新代码目录，**正在服务的目录**需要另行同步
+   （如 deploy.sh 的副本 `/srv/jiatiaoqi` 需 rsync，或 Nginx `root` 指到哪就同步哪），
+   然后 `sudo nginx -t && sudo systemctl reload nginx`（或重启 PM2 进程）。
+
+> 发版约束：页面版本号取自 `index.html` 顶部常量 `APP_VERSION`，每次发版须同步修改
+> `package.json` / `package-lock.json` 的 `version` 字段（见根目录 README「版本」章节）。
+
 ---
 
 ## 7. 一键启动（本地）

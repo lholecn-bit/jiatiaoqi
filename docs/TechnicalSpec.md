@@ -39,6 +39,9 @@
 - aiThinking：AI 思考标记
 - onlineSocket / onlineConnected / onlineRoomId / onlinePlayerColor / onlinePlayersCount：在线状态
 
+> 版本常量：`index.html` 顶部 `APP_VERSION`（页面底部展示「夹挑棋 vX.Y.Z」）。
+> 发版时须与 `package.json` / `package-lock.json` 的 `version` 同步（见根 README「版本」章节）。
+
 ### 3.3 棋盘拓扑
 
 - 预构建 allLines（5 横 + 5 纵 + 6 斜）
