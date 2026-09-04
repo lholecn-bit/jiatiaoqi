@@ -373,8 +373,10 @@ async function main() {
             await sleep(200);
             a.close(); b.close();
 
-            // 页面：打开历史 → 出现该局 → 点开回放 → 步进/自动播放/退出
+            // 页面以参赛者 A 的身份打开历史（游客也只能看自己相关的对局）
             await load(freshUrl('d1'));
+            await cdp.evalJS(`localStorage.setItem('jtq-token', ${JSON.stringify(tA)})`);
+            await load(freshUrl('d1b'));
             await clickById(cdp, 'historyBtn');
             await waitFor(cdp, `document.querySelectorAll('.history-row').length>0`, 8000, '历史列表非空');
             const rows = await cdp.evalJS(`document.querySelectorAll('.history-row').length`);

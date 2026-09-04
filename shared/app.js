@@ -26,13 +26,14 @@ const MIME = {
 // 输出 JSONL：{ t, e, ... }；未指定文件时打到 stdout。
 function makeWsLogger() {
     const file = process.env.WS_LOG_FILE;
+    const verbose = process.env.WS_VERBOSE === '1';
     const stream = file ? fs.createWriteStream(file, { flags: 'a' }) : null;
     let seq = 0;
     return {
         log(e, data = {}) {
             const line = JSON.stringify({ t: new Date().toISOString(), e, seq: ++seq, ...data });
             if (stream) stream.write(line + '\n');
-            else console.log('[ws]', line);
+            else if (verbose) console.log('[ws]', line);
         },
         close() { if (stream) stream.end(); },
     };
@@ -130,13 +131,17 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 return json(res, 200, { player });
             }
             if (req.method === 'GET' && pathname === '/api/games') {
+                // 权限：仅返回与当前身份相关的对局（游客也只能看自己的）
                 const limit = Math.min(Number(q.searchParams.get('limit')) || 50, 200);
-                return json(res, 200, { games: store.listGames(limit) });
+                return json(res, 200, { games: store.listGamesByPlayer(me.id, limit) });
             }
             const m = pathname.match(/^\/api\/games\/(\d+)$/);
             if (req.method === 'GET' && m) {
                 const game = store.getGame(Number(m[1]));
                 if (!game) return json(res, 404, { message: '对局不存在' });
+                if (game.black_player !== me.id && game.white_player !== me.id) {
+                    return json(res, 403, { message: '无权查看该对局' });
+                }
                 return json(res, 200, { game, moves: store.getMoves(game.id) });
             }
             return json(res, 404, { message: '接口不存在' });

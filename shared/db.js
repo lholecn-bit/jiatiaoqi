@@ -152,14 +152,27 @@ function openDb(filePath) {
         },
         listGames(limit = 50) {
             return db.prepare(
-                `SELECT g.*, bp.username AS black_name, wp.username AS white_name,
-                        bp.nick AS black_nick, wp.nick AS white_nick,
+                `SELECT g.*, COALESCE(NULLIF(bp.nick, ''), bp.username) AS black_name,
+                        COALESCE(NULLIF(wp.nick, ''), wp.username) AS white_name,
                         bp.avatar AS black_avatar, wp.avatar AS white_avatar
                  FROM games g
                  LEFT JOIN players bp ON bp.id = g.black_player
                  LEFT JOIN players wp ON wp.id = g.white_player
                  ORDER BY g.started_at DESC, g.id DESC LIMIT ?`
             ).all(limit);
+        },
+        // 权限：只返回与某玩家相关（执黑或执白）的对局
+        listGamesByPlayer(playerId, limit = 50) {
+            return db.prepare(
+                `SELECT g.*, COALESCE(NULLIF(bp.nick, ''), bp.username) AS black_name,
+                        COALESCE(NULLIF(wp.nick, ''), wp.username) AS white_name,
+                        bp.avatar AS black_avatar, wp.avatar AS white_avatar
+                 FROM games g
+                 LEFT JOIN players bp ON bp.id = g.black_player
+                 LEFT JOIN players wp ON wp.id = g.white_player
+                 WHERE g.black_player = ? OR g.white_player = ?
+                 ORDER BY g.started_at DESC, g.id DESC LIMIT ?`
+            ).all(playerId, playerId, limit);
         },
         getGame(id) {
             return db.prepare('SELECT * FROM games WHERE id = ?').get(id) || null;

@@ -1997,8 +1997,8 @@ async function loadHistory() {
         const row = document.createElement('div');
         row.className = 'history-row';
         const b = resultBadge(g);
-        const black = playerLabel({ nick: g.black_nick });
-        const white = playerLabel({ nick: g.white_nick });
+        const black = playerLabel({ nick: g.black_name });
+        const white = playerLabel({ nick: g.white_name });
         const time = (g.started_at || '').replace('T', ' ').slice(0, 16);
         row.innerHTML =
             '<div class="hr-main"><div class="hr-title">黑 ' + black + ' vs 白 ' + white + '</div>' +
