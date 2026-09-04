@@ -199,17 +199,29 @@ async function main() {
         });
 
         // ---------- A3 昵称头像：设置 + 持久化 ----------
-        step('A3 昵称与头像设置并持久化', async () => {
+        step('A3 账号内昵称头像云端持久化', async () => {
             await load(freshUrl('a3'));
+            const user = 'a3_' + Date.now().toString(36);
             await clickById(cdp, 'profileBtn');
             await waitFor(cdp, `document.getElementById('profileOverlay').classList.contains('show')`, 5000, '资料弹窗');
+            // 游客：保存按钮应为“注册并固定名号”（纯随机策略）
+            assert.equal(await cdp.evalJS(`document.getElementById('profileSaveBtn').textContent`), '注册并固定名号');
+            // 切到账号页注册
+            await clickById(cdp, 'tabAccount');
+            await setValue(cdp, 'acctUser', user);
+            await setValue(cdp, 'acctPass', 'secret123');
+            await clickById(cdp, 'acctUpgradeBtn');
+            await waitFor(cdp, `document.getElementById('accountState').textContent.includes('${user}')`, 8000, '注册成功');
+            await waitFor(cdp, `!document.getElementById('profileOverlay').classList.contains('show')`, 6000, '注册后自动关闭');
+            // 再打开外观页，编辑昵称/头像并保存
+            await clickById(cdp, 'profileBtn');
+            await waitFor(cdp, `document.getElementById('profileOverlay').classList.contains('show')`, 5000, '资料弹窗2');
+            assert.equal(await cdp.evalJS(`document.getElementById('profileSaveBtn').textContent`), '保 存');
             await setValue(cdp, 'nickInput', '阿柒');
             await cdp.evalJS(`document.querySelectorAll('#avatarGrid button')[3].click()`);
             await clickById(cdp, 'profileSaveBtn');
-            await waitFor(cdp, `document.getElementById('profileName').textContent==='阿柒'`, 5000, '昵称生效');
-            const stored = await cdp.evalJS(`localStorage.getItem('jtq-profile')`);
-            assert.ok(stored.includes('阿柒') && stored.includes('"avatar":3'), '存储内容: ' + stored);
-            // 刷新持久化
+            await waitFor(cdp, `document.getElementById('profileName').textContent==='阿柒'`, 8000, '昵称生效');
+            // 刷新后云端资料回读
             await load(freshUrl('a3r'));
             assert.equal(await cdp.evalJS(`document.getElementById('profileName').textContent`), '阿柒');
             assert.equal(await cdp.evalJS(`document.getElementById('profileAvatar').textContent`), '🐰');
@@ -262,19 +274,27 @@ async function main() {
 
         // ---------- B1 账号：注册 / 登录态 / 退出（M2a） ----------
         step('B1 游客注册账号并退出', async () => {
+            // 先重置为未登录游客（清除上个流程留下的账号 token/缓存）
             await load(freshUrl('b1'));
+            await cdp.evalJS(`localStorage.removeItem('jtq-token');localStorage.removeItem('jtq-profile')`);
+            await load(freshUrl('b1b'));
             const user = 'ui_' + Date.now().toString(36);
             await clickById(cdp, 'profileBtn');
             await waitFor(cdp, `document.getElementById('profileOverlay').classList.contains('show')`, 5000, '资料弹窗');
+            await clickById(cdp, 'tabAccount');
             await setValue(cdp, 'acctUser', user);
             await setValue(cdp, 'acctPass', 'secret123');
             await clickById(cdp, 'acctUpgradeBtn');
-            await waitFor(cdp, `document.getElementById('accountState').textContent.includes('已登录')`, 8000, '注册后登录态');
+            await waitFor(cdp, `document.getElementById('accountState').textContent.includes('${user}')`, 8000, '注册后登录态');
             assert.ok((await cdp.evalJS(`document.getElementById('accountState').textContent`)).includes(user), '显示用户名');
-            // 退出登录 → 回到游客
+            await waitFor(cdp, `!document.getElementById('profileOverlay').classList.contains('show')`, 6000, '注册后自动关闭');
+            // 重新打开 → 账号页 → 退出登录
+            await clickById(cdp, 'profileBtn');
+            await waitFor(cdp, `document.getElementById('profileOverlay').classList.contains('show')`, 5000, '资料弹窗2');
+            await clickById(cdp, 'tabAccount');
             await clickById(cdp, 'acctLogoutBtn');
             await waitFor(cdp, `!document.getElementById('accountState').textContent.includes('已登录')`, 8000, '退出后回游客');
-            await clickById(cdp, 'profileCancelBtn');
+            await waitFor(cdp, `!document.getElementById('profileOverlay').classList.contains('show')`, 6000, '退出后自动关闭');
         });
 
         // ---------- 汇总 ----------
