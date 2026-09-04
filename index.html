@@ -745,7 +745,7 @@
             outline-offset: 2px;
         }
 
-        /* ===== 品字布局：标题在上，棋盘左 / 控制台右，二者等高 ===== */
+        /* ===== 品字布局：标题在上，棋盘左 / 三个独立卡片右，整体等高 ===== */
         .game-layout {
             display: flex;
             flex-direction: column;
@@ -756,35 +756,39 @@
             margin: 6px auto 0;
             padding: 0 14px;
         }
-        .board-zone { display: flex; flex-direction: column; align-items: center; }
-        .side-panel {
+        .board-zone { display: flex; flex-direction: column; align-items: center; order: 2; }
+        .side-panel { order: 1; }
             display: flex;
             flex-direction: column;
+            gap: 12px;
             width: min(340px, 94vw);
-            padding: 16px;
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.04);
-            backdrop-filter: blur(6px);
             box-sizing: border-box;
         }
-        /* 右侧三区 */
-        .side-panel .side-profile { display: flex; justify-content: center; }
-        .side-panel .side-profile .profile-chip { font-size: 15px; padding: 6px 18px 6px 8px; }
-        .side-panel .side-profile .profile-avatar { width: 30px; height: 30px; font-size: 18px; }
-        .side-state {
+        /* 右侧三个独立卡片 */
+        .side-panel .side-box {
             display: flex;
             flex-direction: column;
             align-items: center;
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.045);
+            backdrop-filter: blur(6px);
+        }
+        .side-profile { padding: 10px 12px; }
+        .side-profile .profile-chip { font-size: 15px; padding: 6px 18px 6px 8px; }
+        .side-profile .profile-avatar { width: 30px; height: 30px; font-size: 18px; }
+        .side-state {
+            padding: 14px 14px 12px;
             justify-content: center;
             gap: 12px;
-            margin: 8px 0;
         }
         .side-state .score-bar { margin: 0; }
         .side-state #status { margin: 0; }
-        .side-state .mode-row { margin: 0; }
         .side-state .online-panel { margin: 0; width: 100%; }
-        .side-actions { display: flex; justify-content: center; }
+        .side-actions { padding: 12px 14px 14px; gap: 12px; }
+        .side-actions .mode-row { margin: 0; }
         .side-actions .btn-row {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -804,20 +808,20 @@
             .game-layout {
                 flex-direction: row;
                 justify-content: center;
-                align-items: stretch;   /* 右栏高度与棋盘一致 */
+                align-items: stretch;
             }
-            .side-panel { width: 320px; }
+            .board-zone { order: 0; }
+            .side-panel { order: 0; width: 320px; }
             .side-state { flex: 1; justify-content: space-evenly; gap: 14px; }
-            .side-panel .side-profile { margin-top: 4px; }
         }
 
         /* 标题与 slogan：上移并自然形成“品”字上部 */
         body { padding-top: 12px; }
         #subtitle { margin-top: 6px; }
 
-        [data-theme="light"] .side-panel {
+        [data-theme="light"] .side-panel .side-box {
             border-color: rgba(140, 110, 60, 0.2);
-            background: rgba(255, 255, 255, 0.55);
+            background: rgba(255, 255, 255, 0.6);
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -841,46 +845,46 @@
         </div>
     </section>
     <aside class="side-panel">
-        <div class="side-profile">
-            <button id="profileBtn" class="profile-chip" type="button">
-                <span id="profileAvatar" class="profile-avatar">🐭</span>
-                <span id="profileName" class="profile-name">游客</span>
-            </button>
-        </div>
-        <div class="side-state">
-            <div class="score-bar">
-                <div class="side" id="blackSide">
-                    <i class="dot black"></i>
-                    <span>黑方: <b id="blackCount">5</b></span>
-                </div>
-                <div class="side" id="whiteSide">
-                    <i class="dot white"></i>
-                    <span>白方: <b id="whiteCount">5</b></span>
-                </div>
+    <div class="side-box side-profile">
+        <button id="profileBtn" class="profile-chip" type="button">
+            <span id="profileAvatar" class="profile-avatar">🐭</span>
+            <span id="profileName" class="profile-name">游客</span>
+        </button>
+    </div>
+    <div class="side-box side-state">
+        <div class="score-bar">
+            <div class="side" id="blackSide">
+                <i class="dot black"></i>
+                <span>黑方: <b id="blackCount">5</b></span>
             </div>
-            <div id="status">黑方走棋</div>
-            <div class="mode-row">
-                <button class="mode-btn active" id="pvpModeBtn">本地双人</button>
-                <button class="mode-btn" id="aiModeBtn">人机对战</button>
-                <button class="mode-btn" id="onlineModeBtn">在线对战</button>
-            </div>
-            <div class="online-panel" id="onlinePanel">
-                <input id="roomInput" placeholder="房间号（如 1001）" />
-                <button id="connectBtn">连接房间</button>
-                <button id="disconnectBtn">断开连接</button>
-                <a id="advToggle" class="adv-toggle">高级设置 ▾</a>
-                <input id="serverInput" class="adv-hidden" placeholder="ws://127.0.0.1:8080" />
-                <div class="online-tip" id="onlineTip">未连接</div>
+            <div class="side" id="whiteSide">
+                <i class="dot white"></i>
+                <span>白方: <b id="whiteCount">5</b></span>
             </div>
         </div>
-        <div class="side-actions">
-            <div class="btn-row">
-                <button id="restartBtn">重新开始</button>
-                <button id="undoBtn">悔 棋</button>
-                <button id="surrenderBtn">认 输</button>
-            </div>
+        <div id="status">黑方走棋</div>
+        <div class="online-panel" id="onlinePanel">
+            <input id="roomInput" placeholder="房间号（如 1001）" />
+            <button id="connectBtn">连接房间</button>
+            <button id="disconnectBtn">断开连接</button>
+            <a id="advToggle" class="adv-toggle">高级设置 ▾</a>
+            <input id="serverInput" class="adv-hidden" placeholder="ws://127.0.0.1:8080" />
+            <div class="online-tip" id="onlineTip">未连接</div>
         </div>
-    </aside>
+    </div>
+    <div class="side-box side-actions">
+        <div class="mode-row">
+            <button class="mode-btn active" id="pvpModeBtn">本地双人</button>
+            <button class="mode-btn" id="aiModeBtn">人机对战</button>
+            <button class="mode-btn" id="onlineModeBtn">在线对战</button>
+        </div>
+        <div class="btn-row">
+            <button id="restartBtn">重新开始</button>
+            <button id="undoBtn">悔 棋</button>
+            <button id="surrenderBtn">认 输</button>
+        </div>
+    </div>
+</aside>
 </div>
 
 <footer class="app-footer">
