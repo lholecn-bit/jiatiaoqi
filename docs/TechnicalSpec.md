@@ -216,7 +216,10 @@
   （1s→…→10s，最多 10 次）并自动重新加入原房间；用户主动断开/切模式不重连；
   重连瞬时"房间已满"等竞态会自动续连
 - 部署：Nginx `/ws` 建议 `proxy_read_timeout 300s`（deploy.sh 已带）
-- 排障日志：`WS_LOG_FILE=/path/ws.log node server.js` 输出 JSONL（conn/join/move/close/hb-terminate/error）
+- 断线重连恢复棋局：房间保留期 `ROOM_KEEP_MS`（默认 5 分钟，0 关闭）——
+  房间无人时不立即删除，期内同身份重连回到原棋盘与行棋方；仅剩一方离开不再
+  结束对局（避免误标 abandoned），全部离开且超保留期才清理
+- 排障日志：`WS_LOG_FILE=/path/ws.log node server.js` 输出 JSONL（conn/join/move/close/hb-terminate/room-expired/error）
 
 
 - WebSocket `join` 消息携带 `token`，服务端校验身份并记录 `playerId`（黑/白）

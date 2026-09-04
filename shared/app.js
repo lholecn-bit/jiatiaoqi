@@ -49,7 +49,7 @@ function readBody(req) {
     });
 }
 
-function createApp({ store, staticDir, heartbeatMs = 30000 }) {
+function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000 }) {
     if (!store) throw new Error('store 必填');
     logic.buildLines(); // 初始化棋盘拓扑索引（幂等）
     const rooms = new Map();
@@ -153,6 +153,23 @@ function createApp({ store, staticDir, heartbeatMs = 30000 }) {
     function broadcast(room, payload) { for (const c of room.clients) send(c, payload); }
     function broadcastExcept(room, ex, payload) { for (const c of room.clients) if (c !== ex) send(c, payload); }
 
+    // 房间保留期：无人连接时不立即删除，短暂断线可在期内重连恢复棋局
+    function scheduleRoomExpiry(room) {
+        if (room.expireTimer) clearTimeout(room.expireTimer);
+        const timer = setTimeout(() => {
+            room.expireTimer = null;
+            const cur = rooms.get(room.roomId);
+            if (!cur || cur !== room || cur.clients.size > 0) return;
+            finalizeRoomGame(cur, 'abandoned', 'leave');
+            rooms.delete(cur.roomId);
+            wsLog.log('room-expired', { room: cur.roomId });
+        }, roomKeepMs);
+        if (typeof timer.unref === 'function') timer.unref(); // 不阻塞进程/测试退出
+        room.expireTimer = timer;
+    }
+    function cancelRoomExpiry(room) {
+        if (room.expireTimer) { clearTimeout(room.expireTimer); room.expireTimer = null; }
+    }
     function chooseColor(room) {
         const used = new Set();
         for (const c of room.clients) if (c.meta && c.meta.color != null) used.add(c.meta.color);
@@ -249,12 +266,13 @@ function createApp({ store, staticDir, heartbeatMs = 30000 }) {
                 if (!player) return send(ws, { type: 'error', message: '身份无效，请刷新页面重试' });
                 let room = rooms.get(roomId);
                 if (!room) {
-                    room = { roomId, clients: new Set(), board: logic.initialBoard(), currentPlayer: BLACK, gameOver: false, gameId: null, moveSeq: 0, finalized: false };
+                    room = { roomId, clients: new Set(), board: logic.initialBoard(), currentPlayer: BLACK, gameOver: false, gameId: null, moveSeq: 0, finalized: false, expireTimer: null };
                     rooms.set(roomId, room);
                 }
                 if (room.clients.size >= 2) return send(ws, { type: 'error', message: '房间已满' });
                 const color = chooseColor(room);
                 if (color == null) return send(ws, { type: 'error', message: '无法分配颜色' });
+                cancelRoomExpiry(room);
                 room.clients.add(ws);
                 ws.meta = { roomId, color, playerId: player.id };
                 wsLog.log('join', { id: ws._logId, room: roomId, color, player: player.id, players: room.clients.size });
@@ -305,9 +323,13 @@ function createApp({ store, staticDir, heartbeatMs = 30000 }) {
             if (!ws.meta || !ws.meta.roomId) return;
             const room = rooms.get(ws.meta.roomId);
             if (!room) return;
-            finalizeRoomGame(room, 'abandoned', 'leave');
             room.clients.delete(ws);
-            if (room.clients.size === 0) { rooms.delete(room.roomId); return; }
+            if (room.clients.size === 0) {
+                // 房间暂时无人：进入保留期，期内重连可恢复原棋局
+                scheduleRoomExpiry(room);
+                return;
+            }
+            // 仍有对手在场：不结束对局（不落 abandoned），等其重连继续
             broadcast(room, { type: 'peer-left', roomId: room.roomId });
             broadcast(room, { type: 'room-update', roomId: room.roomId, players: room.clients.size });
         });
