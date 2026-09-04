@@ -423,13 +423,18 @@
             grid-template-columns: repeat(6, 1fr);
             gap: 8px;
             margin: 6px 0 14px;
+            width: 340px;               /* 桌面端固定舒适宽度（手机端由媒体查询改 100%） */
+            max-width: 100%;
         }
         .avatar-grid button {
+            padding: 0;                 /* 关键：覆盖 .modal button 继承的 10px 26px，否则窄屏被撑爆溢出 */
+            min-width: 0;
             aspect-ratio: 1;
             border-radius: 50%;
             border: 2px solid rgba(255, 255, 255, 0.14);
             background: rgba(255, 255, 255, 0.06);
             font-size: 22px;
+            line-height: 1;
             cursor: pointer;
             transition: transform 0.12s, border-color 0.15s;
         }
@@ -437,6 +442,18 @@
         .avatar-grid button.selected {
             border-color: #f2c14e;
             box-shadow: 0 0 0 2px rgba(242, 193, 78, 0.35);
+        }
+        /* 窄屏（手机）：头像改 4 列，单格更大更好点按；弹窗拉满宽 */
+        @media (max-width: 430px) {
+            .modal {
+                width: min(92vw, 420px);
+            }
+            .avatar-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+                width: 100%;
+            }
+            .avatar-grid button { font-size: 24px; }
         }
         .modal input {
             width: 100%;
@@ -709,7 +726,7 @@
 
 <div class="userbar">
     <button id="profileBtn" class="profile-chip" type="button">
-        <span id="profileAvatar" class="profile-avatar">🐯</span>
+        <span id="profileAvatar" class="profile-avatar">🐭</span>
         <span id="profileName" class="profile-name">游客</span>
     </button>
 </div>
@@ -818,7 +835,7 @@ const ANIM_CONVERT_HOLD = 520;
 const ANIM_STEP_GAP = 360;
 
 // 页面版本号：发版时与 package.json 的 version 同步修改（页面底部展示）
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 
 // ========== 主题（亮/暗）==========
 const THEME_KEY = 'jtq-theme';
@@ -842,7 +859,41 @@ const PALETTES = {
     }
 };
 
-const AVATARS = ['🐯', '🦊', '🐼', '🐸', '🦁', '🐨', '🦉', '🐺', '🐵', '🐧', '🐙', '🐢'];
+// 十二生肖（子鼠丑牛寅虎卯兔辰龙巳蛇午马未羊申猴酉鸡戌狗亥猪）
+const AVATARS = ['🐭', '🐮', '🐯', '🐰', '🐲', '🐍', '🐴', '🐑', '🐵', '🐔', '🐶', '🐷'];
+
+// 头像集版本：1=旧动物集（🦊🐼🐸等），2=十二生肖。用于老用户本地存档一次性迁移。
+const AVATAR_SCHEMA = 2;
+// 旧头像索引 → 新索引（旧集里只有 🐯=0 和 🐵=8 在生肖中保留，其余回落默认 🐭）
+const AVATAR_MIGRATION = { 0: 2, 8: 8 };
+
+// ========== 游客随机名号（「A的B+生肖」，A/B 均褒义，随机组合不固定）==========
+const ZODIAC_NAMES = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
+// 前置褒义形容词
+const NAME_A = [
+    '聪明', '勇敢', '机灵', '可爱', '活泼', '善良', '乐观', '幽默', '帅气', '温柔',
+    '机智', '神勇', '聪慧', '灵巧', '威风', '淡定', '快乐', '勤奋', '自信', '优雅'
+];
+// 后置叠词（描写性情态，与生肖动物搭配读起来更俏皮）
+const NAME_B = [
+    '跳跳', '乖乖', '嘟嘟', '闪闪', '乐乐', '圆圆', '灵灵', '悠悠', '蹦蹦', '飞飞',
+    '亮亮', '甜甜', '快快', '暖暖', '美美', '壮壮', '帅帅', '聪聪', '萌萌', '酷酷'
+];
+
+function randomGuestName(avatarIndex) {
+    const a = NAME_A[Math.floor(Math.random() * NAME_A.length)];
+    let b;
+    do {
+        b = NAME_B[Math.floor(Math.random() * NAME_B.length)];
+    } while (a.includes(b[0])); // 避免「帅气的帅帅」「聪明的聪聪」这类同字重复
+    const z = ZODIAC_NAMES[avatarIndex] || ZODIAC_NAMES[0];
+    return a + '的' + b + z;
+}
+
+// 是否仍是自动生成格式（A的B+生肖）：换头像时此类名字的后缀生肖跟随新头像
+function isAutoName(name) {
+    return /^.+的.+[鼠牛虎兔龙蛇马羊猴鸡狗猪]$/.test(name);
+}
 
 // ========== DOM ==========
 const canvas = document.getElementById('gameCanvas');
@@ -959,7 +1010,7 @@ let onlineRoomId = '';
 let onlinePlayerColor = null;
 let onlinePlayersCount = 0;
 let undoStack = [];          // 悔棋快照栈：{ b, p, last, mover }
-let profile = { avatar: 0, name: '' };
+let profile = { avatar: 0, name: '', v: AVATAR_SCHEMA };
 let tutIndex = 0;
 let tempAvatar = 0;
 
@@ -1227,10 +1278,23 @@ function loadProfile() {
         const raw = localStorage.getItem(PROFILE_KEY);
         if (raw) {
             const p = JSON.parse(raw);
-            profile = {
-                avatar: Number.isInteger(p.avatar) && p.avatar >= 0 && p.avatar < AVATARS.length ? p.avatar : 0,
-                name: typeof p.name === 'string' ? p.name.slice(0, 14) : ''
-            };
+            let avatar = Number.isInteger(p.avatar) && p.avatar >= 0 && p.avatar < AVATARS.length ? p.avatar : 0;
+            const name = typeof p.name === 'string' ? p.name.slice(0, 14) : '';
+            const needsMigrate = p.v !== AVATAR_SCHEMA;
+            if (needsMigrate) {
+                // 旧头像集 → 十二生肖的一次性迁移
+                avatar = Object.prototype.hasOwnProperty.call(AVATAR_MIGRATION, p.avatar) ? AVATAR_MIGRATION[p.avatar] : 0;
+            }
+            profile = { avatar, name, v: AVATAR_SCHEMA };
+            if (needsMigrate) {
+                localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); // 立即回写，迁移只跑一次
+            }
+        } else {
+            // 游客模式：头像与名号都随机生成，仅存内存不落盘。
+            // 待后续接入数据库/账号体系后再做持久化。
+            profile.avatar = Math.floor(Math.random() * AVATARS.length);
+            profile.name = randomGuestName(profile.avatar);
+            profile.v = AVATAR_SCHEMA;
         }
     } catch (e) {}
 }
@@ -1258,6 +1322,12 @@ function openProfileModal() {
             avatarGridEl.querySelectorAll('button').forEach(x => x.classList.remove('selected'));
             b.classList.add('selected');
             tempAvatar = i;
+            // 若昵称还是自动生成名（A的B+生肖），后缀生肖实时跟随新头像；
+            // 用户自己起的名字不动
+            const curName = nickInputEl.value;
+            if (isAutoName(curName)) {
+                nickInputEl.value = curName.slice(0, -1) + (ZODIAC_NAMES[i] || ZODIAC_NAMES[0]);
+            }
         });
         avatarGridEl.appendChild(b);
     });
@@ -1268,6 +1338,7 @@ function openProfileModal() {
 async function saveProfile() {
     profile.avatar = tempAvatar;
     profile.name = nickInputEl.value.trim().slice(0, 14);
+    profile.v = AVATAR_SCHEMA;
     try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch (e) {}
     renderProfile();
     // 云端同步（失败时静默，保留本地）

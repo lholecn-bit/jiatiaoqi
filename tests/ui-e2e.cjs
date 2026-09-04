@@ -212,7 +212,7 @@ async function main() {
             // 刷新持久化
             await load(freshUrl('a3r'));
             assert.equal(await cdp.evalJS(`document.getElementById('profileName').textContent`), '阿柒');
-            assert.equal(await cdp.evalJS(`document.getElementById('profileAvatar').textContent`), '🐸');
+            assert.equal(await cdp.evalJS(`document.getElementById('profileAvatar').textContent`), '🐰');
         });
 
         // ---------- A4 悔棋：本地双人 ----------
