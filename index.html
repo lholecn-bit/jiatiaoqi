@@ -769,14 +769,13 @@
             margin: 6px auto 0;
             padding: 0 14px;
         }
-        .board-zone { display: flex; flex-direction: column; align-items: center; order: 2; }
+        .board-zone { display: flex; flex-direction: column; align-items: center; order: 3; }
         .side-panel {
             display: flex;
             flex-direction: column;
             gap: 12px;
             width: min(340px, 94vw);
             box-sizing: border-box;
-            order: 1;
         }
         /* 右侧三个独立卡片 */
         .side-panel .side-box {
@@ -818,6 +817,16 @@
         }
         .board-zone .board-frame { margin: 0; }
 
+        /* 窄屏：身份/状态卡在上、棋盘居中、操作按钮沉到棋盘下方，保证首屏能看到棋盘
+           （display:contents 把三张卡片提升为 .game-layout 的直接参与排序项） */
+        @media (max-width: 999px) {
+            .side-panel { display: contents; }
+            .side-panel .side-box { width: min(340px, 94vw); }
+            .side-profile { order: 1; }
+            .side-state { order: 2; }
+            .side-actions { order: 4; }
+        }
+
         @media (min-width: 1000px) {
             .game-layout {
                 flex-direction: row;
@@ -827,6 +836,14 @@
             .board-zone { order: 0; }
             .side-panel { order: 0; width: 320px; }
             .side-state { flex: 1; justify-content: space-evenly; gap: 14px; }
+            /* 品字上口锚定棋盘：标题中线对齐棋盘中线。
+               棋盘块 530px（500 画布 + 28 内衬 + 2 边框），右栏 320px + 间隙 16px = 336px，
+               标题盒宽 530 并整体右让 336px 后，flex 居中位置恰使标题中线落在棋盘中线上 */
+            .site-head {
+                width: 530px;
+                max-width: none;
+                margin: 0 336px 0 0;
+            }
         }
 
         /* 标题与 slogan：上移并自然形成“品”字上部 */
@@ -941,9 +958,6 @@
                 <button id="acctLoginBtn" class="btn-plain" type="button">登 录</button>
                 <button id="acctLogoutBtn" class="btn-plain" type="button" style="display:none">退出登录</button>
             </div>
-        </div>
-    </div>
-</div>
         </div>
     </div>
 </div>
