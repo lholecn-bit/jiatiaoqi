@@ -393,6 +393,40 @@ async function main() {
             assert.ok((await cdp.evalJS(`document.getElementById('status').textContent`)).includes('走棋'), '恢复普通对局界面');
         });
 
+        // ---------- E1 观战大厅：第三方旁观进行中的房间 ----------
+        step('E1 观战大厅可旁观对局', async () => {
+            const mk = async () => (await (await fetch(BASE.replace('/index.html', '') + '/api/guest', { method: 'POST' })).json()).token;
+            const room = 'watch_' + Date.now().toString(36);
+            const tA = await mk(), tB = await mk();
+            const a = new WebSocket(WS_BASE); const b = new WebSocket(WS_BASE);
+            await new Promise((r) => a.once('open', r)); await new Promise((r) => b.once('open', r));
+            let aJ = false, bJ = false, bM = false;
+            a.on('message', (d) => { const m = JSON.parse(d); if (m.type === 'joined') aJ = true; });
+            b.on('message', (d) => { const m = JSON.parse(d); if (m.type === 'joined') bJ = true; if (m.type === 'move') bM = true; });
+            a.send(JSON.stringify({ type: 'join', roomId: room, token: tA }));
+            await (async () => { while (!aJ) await sleep(50); })();
+            b.send(JSON.stringify({ type: 'join', roomId: room, token: tB }));
+            await (async () => { while (!bJ) await sleep(50); })();
+            a.send(JSON.stringify({ type: 'move', roomId: room, move: { fx: 0, fy: 0, tx: 0, ty: 2 } }));
+            await (async () => { while (!bM) await sleep(50); })();
+
+            // 页面打开观战大厅 → 找到该房间 → 观战
+            await load(freshUrl('e1'));
+            await clickById(cdp, 'roomsBtn');
+            await waitFor(cdp, `document.querySelectorAll('.room-row').length>0`, 8000, '房间列表非空');
+            const found = await cdp.evalJS(`(()=>{const rows=[...document.querySelectorAll('.room-row')];
+                const row=rows.find(r=>r.textContent.includes(${JSON.stringify(room)})); return !!row})()`);
+            assert.ok(found, '大厅应显示该进行中房间');
+            await cdp.evalJS(`(()=>{const rows=[...document.querySelectorAll('.room-row')];
+                const row=rows.find(r=>r.textContent.includes(${JSON.stringify(room)}));
+                [...row.querySelectorAll('.btn-mini')].find(b=>b.textContent==='观战').click()})()`);
+            await waitFor(cdp, `document.getElementById('onlineTip').textContent.includes('观战中') || document.getElementById('status').textContent.includes('观战中')`, 10000, '进入观战');
+            assert.ok((await cdp.evalJS(`document.getElementById('onlineTip').textContent`)).includes(room), '观战房间号正确');
+            a.close(); b.close();
+            await clickById(cdp, 'disconnectBtn');
+            await waitFor(cdp, `document.getElementById('onlineTip').textContent.includes('已手动断开')`, 5000, '观战退出');
+        });
+
         // ---------- 汇总 ----------
         console.log('\n===== M1 UI E2E =====');
         for (const s of steps) {

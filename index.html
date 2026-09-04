@@ -929,6 +929,63 @@
         }
         [data-theme="light"] .replay-info { color: #a87216; }
 
+        .profile-meta {
+            font-size: 11.5px;
+            color: #8fa2c6;
+            margin-top: 7px;
+            text-align: center;
+            min-height: 1.2em;
+        }
+        [data-theme="light"] .profile-meta { color: #8a7350; }
+
+        /* 房间行与排行榜行 */
+        .room-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            transition: background 0.2s;
+        }
+        .room-row .rr-main { font-size: 13.5px; color: #eef1f8; min-width: 0; }
+        .room-row .rr-sub { font-size: 12px; color: #93a0b8; margin-top: 2px; }
+        .room-row .rr-actions { display: flex; gap: 6px; }
+        .btn-mini {
+            border: 0;
+            border-radius: 8px;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+            background: linear-gradient(180deg, #f4d485, #dcab4c);
+            color: #2b2010;
+            font-weight: 600;
+        }
+        .btn-mini.ghost {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #c7d0e2;
+            font-weight: 400;
+        }
+        .btn-mini:disabled { opacity: 0.45; cursor: not-allowed; }
+        .lb-row {
+            display: grid;
+            grid-template-columns: 34px 1fr auto;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: 10px;
+        }
+        .lb-row .rank { text-align: center; font-weight: 700; color: #f0d060; }
+        .lb-row .who { font-size: 13.5px; color: #eef1f8; }
+        .lb-row .stat { font-size: 12px; color: #93a0b8; text-align: right; }
+        [data-theme="light"] .room-row { border-color: rgba(140, 110, 60, 0.2); background: rgba(255, 255, 255, 0.6); }
+        [data-theme="light"] .room-row .rr-main { color: #3c3426; }
+        [data-theme="light"] .btn-mini.ghost { border-color: rgba(140, 110, 60, 0.35); color: #5a4a2e; }
+
         @media (prefers-reduced-motion: reduce) {
             #status::before { animation: none; }
             * { transition: none !important; animation: none !important; }
@@ -956,6 +1013,7 @@
             <span id="profileAvatar" class="profile-avatar">🐭</span>
             <span id="profileName" class="profile-name">游客</span>
         </button>
+        <div id="profileMeta" class="profile-meta"></div>
     </div>
     <div class="side-box side-state">
         <div class="score-bar">
@@ -997,6 +1055,10 @@
     <button id="tutorialBtn" class="footer-link" type="button">玩法教程</button>
     <span class="footer-sep">·</span>
     <button id="historyBtn" class="footer-link" type="button">对局回放</button>
+    <span class="footer-sep">·</span>
+    <button id="roomsBtn" class="footer-link" type="button">观战大厅</button>
+    <span class="footer-sep">·</span>
+    <button id="lbBtn" class="footer-link" type="button">排行榜</button>
     <span id="appVersion" class="app-version"></span>
 </footer>
 
@@ -1058,6 +1120,31 @@
         <div class="modal-actions">
             <button id="historyRefreshBtn" class="btn-plain" type="button">刷 新</button>
             <button id="historyCloseBtn" class="btn-plain" type="button">关 闭</button>
+        </div>
+    </div>
+</div>
+
+<div id="roomsOverlay" class="modal-overlay">
+    <div class="modal history-modal">
+        <button id="roomsCloseX" class="modal-x" type="button" aria-label="关闭">✕</button>
+        <h2>观战大厅</h2>
+        <div class="account-state" style="min-height:0">进行中/等待中的在线房间（观战为延迟同步）。</div>
+        <div id="roomsList" class="history-list"></div>
+        <div class="modal-actions">
+            <button id="roomsRefreshBtn" class="btn-plain" type="button">刷 新</button>
+            <button id="roomsCloseBtn" class="btn-plain" type="button">关 闭</button>
+        </div>
+    </div>
+</div>
+
+<div id="lbOverlay" class="modal-overlay">
+    <div class="modal history-modal">
+        <button id="lbCloseX" class="modal-x" type="button" aria-label="关闭">✕</button>
+        <h2>排行榜</h2>
+        <div id="lbList" class="history-list"></div>
+        <div class="modal-actions">
+            <button id="lbRefreshBtn" class="btn-plain" type="button">刷 新</button>
+            <button id="lbCloseBtn" class="btn-plain" type="button">关 闭</button>
         </div>
     </div>
 </div>
@@ -1213,6 +1300,19 @@ const rpLastEl = document.getElementById('rpLast');
 const rpSpeedEl = document.getElementById('rpSpeed');
 const rpCloseEl = document.getElementById('rpClose');
 
+// M3：观战大厅 / 排行榜 / 资料meta
+const roomsBtnEl = document.getElementById('roomsBtn');
+const roomsOverlayEl = document.getElementById('roomsOverlay');
+const roomsListEl = document.getElementById('roomsList');
+const roomsRefreshBtnEl = document.getElementById('roomsRefreshBtn');
+const roomsCloseBtnEl = document.getElementById('roomsCloseBtn');
+const lbBtnEl = document.getElementById('lbBtn');
+const lbOverlayEl = document.getElementById('lbOverlay');
+const lbListEl = document.getElementById('lbList');
+const lbRefreshBtnEl = document.getElementById('lbRefreshBtn');
+const lbCloseBtnEl = document.getElementById('lbCloseBtn');
+const profileMetaEl = document.getElementById('profileMeta');
+
 // M2：账号 / 云端身份
 const TOKEN_KEY = 'jtq-token';
 const acctUserEl = document.getElementById('acctUser');
@@ -1298,6 +1398,8 @@ const RECONNECT_MAX_ATTEMPTS = 10;
 const PING_INTERVAL = 10000;    // 客户端每 10s 发一次应用层 ping
 const PONG_TIMEOUT = 20000;     // 20s 未收到 pong 判定连接已死
 let pendingMyUndo = false;   // 在线：我刚走了最后一步且对方尚未行棋（此时可悔）
+let onlineSpectator = false; // 在线：我是观战者（不可操作）
+let reconnectSpectate = false;
 let undoStack = [];          // 悔棋快照栈：{ b, p, last, mover }
 let profile = { avatar: 0, name: '', v: AVATAR_SCHEMA };
 let tutIndex = 0;
@@ -1345,6 +1447,7 @@ function closeOnlineSocket() {
     onlinePlayerColor = null;
     onlinePlayersCount = 0;
     pendingMyUndo = false;
+    onlineSpectator = false;
     syncUndoBtn();
 }
 
@@ -1383,11 +1486,17 @@ function handleOnlineMessage(payload) {
         reconnectAttempts = 0;
         if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
         pendingMyUndo = false;
-        onlinePlayerColor = payload.color;
+        onlineSpectator = !!payload.spectator;
         onlineRoomId = payload.roomId;
         onlinePlayersCount = payload.players || 1;
-        const colorName = onlinePlayerColor === BLACK ? '黑方' : '白方';
-        setOnlineTip(`已进入房间 ${onlineRoomId}，你是${colorName}`);
+        if (onlineSpectator) {
+            onlinePlayerColor = null;
+            setOnlineTip(`观战中：房间 ${onlineRoomId}（延迟同步，仅观看）`);
+        } else {
+            onlinePlayerColor = payload.color;
+            const colorName = onlinePlayerColor === BLACK ? '黑方' : '白方';
+            setOnlineTip(`已进入房间 ${onlineRoomId}，你是${colorName}`);
+        }
         if (payload.board) {
             board = payload.board;
             curPlayer = payload.currentPlayer;
@@ -1408,8 +1517,12 @@ function handleOnlineMessage(payload) {
 
     if (payload.type === 'room-update') {
         onlinePlayersCount = payload.players || 0;
-        const waitText = onlinePlayersCount < 2 ? '（等待另一位玩家加入）' : '';
-        setOnlineTip(`房间 ${onlineRoomId} 在线人数：${onlinePlayersCount}/2 ${waitText}`.trim());
+        if (onlineSpectator) {
+            setOnlineTip(`观战中：房间 ${onlineRoomId}（在线 ${onlinePlayersCount}/2）`);
+        } else {
+            const waitText = onlinePlayersCount < 2 ? '（等待另一位玩家加入）' : '';
+            setOnlineTip(`房间 ${onlineRoomId} 在线人数：${onlinePlayersCount}/2 ${waitText}`.trim());
+        }
         updateUI();
         return;
     }
@@ -1503,7 +1616,7 @@ function stopPingTimer() {
 }
 
 // 建立一条新连接并加入房间（首次连接与断线重连共用）
-function openSocket(wsUrl, roomId) {
+function openSocket(wsUrl, roomId, spectate) {
     const socket = new WebSocket(wsUrl);
     onlineSocket = socket;
 
@@ -1511,8 +1624,11 @@ function openSocket(wsUrl, roomId) {
         if (onlineSocket !== socket) return;
         setOnlineConnected(true);
         lastPongAt = Date.now();
-        setOnlineTip('已连接服务器，加入房间中...');
-        sendOnlineMessage({ type: 'join', roomId, token: currentToken || '' });
+        setOnlineTip(spectate ? '已连接服务器，进入观战...' : '已连接服务器，加入房间中...');
+        sendOnlineMessage({
+            type: 'join', roomId, token: currentToken || '',
+            ...(spectate ? { spectate: true } : {}),
+        });
     };
 
     socket.onmessage = (event) => {
@@ -1563,8 +1679,8 @@ function scheduleReconnect() {
     reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         if (gameMode !== 'online' || manualClose) return;
-        setOnlineTip('正在重连...');
-        openSocket(normalizeWsUrl(serverInputEl.value), reconnectRoomId);
+        setOnlineTip(reconnectSpectate ? '正在重连（观战）...' : '正在重连...');
+        openSocket(normalizeWsUrl(serverInputEl.value), reconnectRoomId, reconnectSpectate);
     }, delay);
 }
 
@@ -1601,9 +1717,10 @@ async function connectOnlineRoom() {
     reconnectAttempts = 0;
     reconnectRoomId = roomId;
     closeOnlineSocket();
+    reconnectSpectate = false;
     setOnlineTip('连接中...');
     startPingTimer();
-    openSocket(normalizeWsUrl(serverInputEl.value), roomId);
+    openSocket(normalizeWsUrl(serverInputEl.value), roomId, false);
 }
 
 function resetBoard() {
@@ -1713,6 +1830,7 @@ function renderProfile() {
     if (!profileAvatarEl || !profileNameEl) return;
     profileAvatarEl.textContent = AVATARS[profile.avatar] || AVATARS[0];
     profileNameEl.textContent = displayName();
+    if (typeof renderProfileMeta === 'function') renderProfileMeta();
 }
 
 function updateProfilePanelState() {
@@ -2120,6 +2238,126 @@ function closeReplay() {
     updatePieceCounts();
     updateUI();
     draw();
+}
+
+// ========== M3：观战大厅 / 排行榜 / 资料meta ==========
+async function openRooms() {
+    if (replayMode) return;
+    if (gameMode === 'online' && onlineConnected && !onlineSpectator) {
+        setOnlineTip('对局中请先退出当前房间，再到观战大厅');
+        return;
+    }
+    await loadRooms();
+    openOverlay(roomsOverlayEl);
+}
+
+async function loadRooms() {
+    roomsListEl.innerHTML = '<div class="account-state">加载中…</div>';
+    await ensureIdentity();
+    const r = await apiCall('/api/rooms');
+    if (!r.ok) {
+        roomsListEl.innerHTML = '<div class="account-state">获取房间列表失败</div>';
+        return;
+    }
+    const rooms = (r.data && r.data.rooms) || [];
+    if (rooms.length === 0) {
+        roomsListEl.innerHTML = '<div class="account-state">当前没有可观的房间（进行中/等待中）</div>';
+        return;
+    }
+    roomsListEl.innerHTML = '';
+    rooms.forEach((room) => {
+        const row = document.createElement('div');
+        row.className = 'room-row';
+        const names = room.players.map((p) => (p.color === 1 ? '黑' : '白') + ' ' + p.name).join(' · ');
+        const stateText = room.state === 'playing' ? '对局中' : '等待对手';
+        const main = document.createElement('div');
+        main.className = 'rr-main';
+        main.innerHTML = '<div>' + (names || '房间 ' + room.roomId) + '</div>' +
+            '<div class="rr-sub">' + room.roomId + ' · ' + stateText + ' · 观战 ' + room.spectators + ' 人 · 已走 ' + room.moves + ' 手</div>';
+        row.appendChild(main);
+        const acts = document.createElement('div');
+        acts.className = 'rr-actions';
+        if (room.seats < 2) {
+            const jb = document.createElement('button');
+            jb.className = 'btn-mini';
+            jb.textContent = '加入';
+            jb.addEventListener('click', () => joinRoomFromHall(room.roomId));
+            acts.appendChild(jb);
+        }
+        const sb = document.createElement('button');
+        sb.className = 'btn-mini ghost';
+        sb.textContent = '观战';
+        sb.addEventListener('click', () => spectateRoomFromHall(room.roomId));
+        acts.appendChild(sb);
+        row.appendChild(acts);
+        roomsListEl.appendChild(row);
+    });
+}
+
+async function joinRoomFromHall(roomId) {
+    closeOverlay(roomsOverlayEl);
+    await connectOnlineTo(roomId, false);
+}
+
+async function spectateRoomFromHall(roomId) {
+    closeOverlay(roomsOverlayEl);
+    await connectOnlineTo(roomId, true);
+}
+
+async function connectOnlineTo(roomId, spectate) {
+    if (gameMode !== 'online') {
+        gameMode = 'online';
+        updateModeUI();
+    }
+    if (!currentToken) {
+        const ok = await ensureIdentity();
+        if (!ok) { setOnlineTip('无法创建身份，请检查网络后重试'); return; }
+    }
+    manualClose = false;
+    reconnectAttempts = 0;
+    reconnectRoomId = roomId;
+    reconnectSpectate = !!spectate;
+    closeOnlineSocket();
+    setOnlineTip(spectate ? '进入观战...' : '连接中...');
+    startPingTimer();
+    openSocket(normalizeWsUrl(serverInputEl.value), roomId, !!spectate);
+}
+
+// 排行榜
+async function openLeaderboard() {
+    await loadLeaderboard();
+    openOverlay(lbOverlayEl);
+}
+async function loadLeaderboard() {
+    lbListEl.innerHTML = '<div class="account-state">加载中…</div>';
+    await ensureIdentity();
+    const r = await apiCall('/api/leaderboard?limit=30');
+    if (!r.ok) { lbListEl.innerHTML = '<div class="account-state">获取排行榜失败</div>'; return; }
+    const lb = (r.data && r.data.leaderboard) || [];
+    if (lb.length === 0) { lbListEl.innerHTML = '<div class="account-state">暂无排名（需账号对战产生战绩）</div>'; return; }
+    lbListEl.innerHTML = '';
+    lb.forEach((p, i) => {
+        const row = document.createElement('div');
+        row.className = 'lb-row';
+        const nm = document.createElement('span'); nm.className = 'rank'; nm.textContent = String(i + 1);
+        const who = document.createElement('span'); who.className = 'who'; who.textContent = p.nick || p.username || '游客';
+        const stat = document.createElement('span'); stat.className = 'stat';
+        stat.textContent = p.rating + ' 分 · ' + p.wins + '胜/' + p.losses + '负';
+        row.append(nm, who, stat);
+        lbListEl.appendChild(row);
+    });
+}
+
+// 名号卡 meta（管理员徽章 / 段位战绩）
+function renderProfileMeta() {
+    if (!profileMetaEl) return;
+    if (!isAccount() || !accountInfo) { profileMetaEl.textContent = ''; return; }
+    const a = accountInfo;
+    const parts = [];
+    if (a.admin) parts.push('🛡️ 管理员');
+    if (typeof a.rating === 'number') parts.push(a.rating + ' 分');
+    if (typeof a.wins === 'number') parts.push(a.wins + '胜/' + a.losses + '负');
+    profileMetaEl.textContent = parts.join(' · ');
 }
 
 // ========== M1：玩法教程 ==========
@@ -2683,7 +2921,9 @@ function updateUI() {
         return;
     } else {
         if (gameMode === 'online') {
-            if (!onlineConnected) {
+            if (onlineSpectator) {
+                statusEl.textContent = '观战中 · 等待对局推送…';
+            } else if (!onlineConnected) {
                 statusEl.textContent = '在线模式：请先连接房间';
             } else if (onlinePlayersCount < 2) {
                 statusEl.textContent = '在线模式：等待另一位玩家加入';
@@ -3232,6 +3472,16 @@ rpSpeedEl.addEventListener('click', () => {
     if (replayTimer) startReplayTimer();
 });
 rpCloseEl.addEventListener('click', closeReplay);
+
+// ========== M3 事件 ==========
+roomsBtnEl.addEventListener('click', openRooms);
+roomsRefreshBtnEl.addEventListener('click', loadRooms);
+roomsCloseBtnEl.addEventListener('click', () => closeOverlay(roomsOverlayEl));
+document.getElementById('roomsCloseX').addEventListener('click', () => closeOverlay(roomsOverlayEl));
+lbBtnEl.addEventListener('click', openLeaderboard);
+lbRefreshBtnEl.addEventListener('click', loadLeaderboard);
+lbCloseBtnEl.addEventListener('click', () => closeOverlay(lbOverlayEl));
+document.getElementById('lbCloseX').addEventListener('click', () => closeOverlay(lbOverlayEl));
 
 // ========== Init ==========
 const appVersionEl = document.getElementById('appVersion');
