@@ -789,6 +789,9 @@
         }
         .board-zone .score-bar { margin: 4px 0 10px; }
         .board-zone .board-frame { margin: 0; }
+        .side-panel .userbar { margin: 0 0 4px; display: flex; justify-content: center; }
+        .side-panel .score-bar { margin: 0 0 10px; }
+        .side-panel .score-bar .side { padding: 6px 18px 6px 12px; }
 
         /* 操作按钮：等宽三列一排，避免 2+1 换行 */
         .side-panel .btn-row {
@@ -832,50 +835,51 @@
 
 <button id="themeBtn" class="theme-btn" title="切换亮/暗主题" aria-label="切换亮/暗主题">🌙</button>
 
-<div class="userbar">
-    <button id="profileBtn" class="profile-chip" type="button">
-        <span id="profileAvatar" class="profile-avatar">🐭</span>
-        <span id="profileName" class="profile-name">游客</span>
-    </button>
-</div>
 
 <div class="game-layout">
     <section class="board-zone">
-<div class="score-bar">
-    <div class="side" id="blackSide">
-        <i class="dot black"></i>
-        <span>黑方: <b id="blackCount">5</b></span>
-    </div>
-    <div class="side" id="whiteSide">
-        <i class="dot white"></i>
-        <span>白方: <b id="whiteCount">5</b></span>
-    </div>
-</div>
-<div class="board-frame">
-    <canvas id="gameCanvas"></canvas>
-</div>    </section>
+        <div class="board-frame">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+    </section>
     <aside class="side-panel">
-<div id="status">黑方走棋</div>
-<div class="mode-row">
-    <button class="mode-btn active" id="pvpModeBtn">本地双人</button>
-    <button class="mode-btn" id="aiModeBtn">人机对战</button>
-    <button class="mode-btn" id="onlineModeBtn">在线对战</button>
+        <div class="userbar">
+            <button id="profileBtn" class="profile-chip" type="button">
+                <span id="profileAvatar" class="profile-avatar">🐭</span>
+                <span id="profileName" class="profile-name">游客</span>
+            </button>
+        </div>
+        <div class="score-bar">
+            <div class="side" id="blackSide">
+                <i class="dot black"></i>
+                <span>黑方: <b id="blackCount">5</b></span>
+            </div>
+            <div class="side" id="whiteSide">
+                <i class="dot white"></i>
+                <span>白方: <b id="whiteCount">5</b></span>
+            </div>
+        </div>
+        <div id="status">黑方走棋</div>
+        <div class="mode-row">
+            <button class="mode-btn active" id="pvpModeBtn">本地双人</button>
+            <button class="mode-btn" id="aiModeBtn">人机对战</button>
+            <button class="mode-btn" id="onlineModeBtn">在线对战</button>
+        </div>
+        <div class="online-panel" id="onlinePanel">
+            <input id="roomInput" placeholder="房间号（如 1001）" />
+            <button id="connectBtn">连接房间</button>
+            <button id="disconnectBtn">断开连接</button>
+            <a id="advToggle" class="adv-toggle">高级设置 ▾</a>
+            <input id="serverInput" class="adv-hidden" placeholder="ws://127.0.0.1:8080" />
+            <div class="online-tip" id="onlineTip">未连接</div>
+        </div>
+        <div class="btn-row">
+            <button id="restartBtn">重新开始</button>
+            <button id="undoBtn">悔 棋</button>
+            <button id="surrenderBtn">认 输</button>
+        </div>
+    </aside>
 </div>
-<div class="online-panel" id="onlinePanel">
-    <input id="roomInput" placeholder="房间号（如 1001）" />
-    <button id="connectBtn">连接房间</button>
-    <button id="disconnectBtn">断开连接</button>
-    <a id="advToggle" class="adv-toggle">高级设置 ▾</a>
-    <input id="serverInput" class="adv-hidden" placeholder="ws://127.0.0.1:8080" />
-    <div class="online-tip" id="onlineTip">未连接</div>
-</div>
-<div class="btn-row">
-    <button id="restartBtn">重新开始</button>
-    <button id="undoBtn">悔 棋</button>
-    <button id="surrenderBtn">认 输</button>
-</div>    </aside>
-</div>
-
 
 <footer class="app-footer">
     <button id="tutorialBtn" class="footer-link" type="button">玩法教程</button>
