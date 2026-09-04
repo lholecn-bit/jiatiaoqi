@@ -3,7 +3,7 @@
 // 前置：本地 server 已启动（默认 http://127.0.0.1:8080）
 'use strict';
 
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const WebSocket = require('ws');
 const assert = require('node:assert/strict');
 
@@ -71,6 +71,7 @@ class CDP {
 
 // ---------- 工具 ----------
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const WS_BASE = (() => { const u = new URL(BASE); return (u.protocol === 'https:' ? 'wss' : 'ws') + '://' + u.host + '/ws'; })();
 
 async function fetchJson(url) {
     const r = await fetch(url);
@@ -137,6 +138,16 @@ async function main() {
     const steps = [];
     const step = (name, fn) => steps.push({ name, fn });
 
+    // 前置：确保本地服务在线（不在则用 start-server.sh 拉起）
+    const up = await fetch(BASE).then(() => true).catch(() => false);
+    if (!up) {
+        execSync('./start-server.sh', { stdio: 'pipe' });
+        for (let i = 0; i < 30 && !up; i++) {
+            await sleep(300);
+            if (await fetch(BASE).then(() => true).catch(() => false)) break;
+        }
+    }
+
     const freshUrl = (tag) => `${BASE}?t=${tag}`;
 
     try {
@@ -199,20 +210,32 @@ async function main() {
         });
 
         // ---------- A3 昵称头像：设置 + 持久化 ----------
-        step('A3 昵称与头像设置并持久化', async () => {
+        step('A3 账号内昵称头像云端持久化', async () => {
             await load(freshUrl('a3'));
+            const user = 'a3_' + Date.now().toString(36);
             await clickById(cdp, 'profileBtn');
             await waitFor(cdp, `document.getElementById('profileOverlay').classList.contains('show')`, 5000, '资料弹窗');
+            // 游客：保存按钮应为“注册并固定名号”（纯随机策略）
+            assert.equal(await cdp.evalJS(`document.getElementById('profileSaveBtn').textContent`), '注册并固定名号');
+            // 切到账号页注册
+            await clickById(cdp, 'tabAccount');
+            await setValue(cdp, 'acctUser', user);
+            await setValue(cdp, 'acctPass', 'secret123');
+            await clickById(cdp, 'acctUpgradeBtn');
+            await waitFor(cdp, `document.getElementById('accountState').textContent.includes('${user}')`, 8000, '注册成功');
+            await waitFor(cdp, `!document.getElementById('profileOverlay').classList.contains('show')`, 6000, '注册后自动关闭');
+            // 再打开外观页，编辑昵称/头像并保存
+            await clickById(cdp, 'profileBtn');
+            await waitFor(cdp, `document.getElementById('profileOverlay').classList.contains('show')`, 5000, '资料弹窗2');
+            assert.equal(await cdp.evalJS(`document.getElementById('profileSaveBtn').textContent`), '保 存');
             await setValue(cdp, 'nickInput', '阿柒');
             await cdp.evalJS(`document.querySelectorAll('#avatarGrid button')[3].click()`);
             await clickById(cdp, 'profileSaveBtn');
-            await waitFor(cdp, `document.getElementById('profileName').textContent==='阿柒'`, 5000, '昵称生效');
-            const stored = await cdp.evalJS(`localStorage.getItem('jtq-profile')`);
-            assert.ok(stored.includes('阿柒') && stored.includes('"avatar":3'), '存储内容: ' + stored);
-            // 刷新持久化
+            await waitFor(cdp, `document.getElementById('profileName').textContent==='阿柒'`, 8000, '昵称生效');
+            // 刷新后云端资料回读
             await load(freshUrl('a3r'));
             assert.equal(await cdp.evalJS(`document.getElementById('profileName').textContent`), '阿柒');
-            assert.equal(await cdp.evalJS(`document.getElementById('profileAvatar').textContent`), '🐸');
+            assert.equal(await cdp.evalJS(`document.getElementById('profileAvatar').textContent`), '🐰');
         });
 
         // ---------- A4 悔棋：本地双人 ----------
@@ -258,6 +281,116 @@ async function main() {
             await clickById(cdp, 'tutNextBtn');
             assert.ok((await cdp.evalJS(`document.getElementById('tutTitle').textContent`)).includes('棋盘'));
             await clickById(cdp, 'tutSkipBtn');
+        });
+
+        // ---------- B1 账号：注册 / 登录态 / 退出（M2a） ----------
+        step('B1 游客注册账号并退出', async () => {
+            // 先重置为未登录游客（清除上个流程留下的账号 token/缓存）
+            await load(freshUrl('b1'));
+            await cdp.evalJS(`localStorage.removeItem('jtq-token');localStorage.removeItem('jtq-profile')`);
+            await load(freshUrl('b1b'));
+            const user = 'ui_' + Date.now().toString(36);
+            await clickById(cdp, 'profileBtn');
+            await waitFor(cdp, `document.getElementById('profileOverlay').classList.contains('show')`, 5000, '资料弹窗');
+            await clickById(cdp, 'tabAccount');
+            await setValue(cdp, 'acctUser', user);
+            await setValue(cdp, 'acctPass', 'secret123');
+            await clickById(cdp, 'acctUpgradeBtn');
+            await waitFor(cdp, `document.getElementById('accountState').textContent.includes('${user}')`, 8000, '注册后登录态');
+            assert.ok((await cdp.evalJS(`document.getElementById('accountState').textContent`)).includes(user), '显示用户名');
+            await waitFor(cdp, `!document.getElementById('profileOverlay').classList.contains('show')`, 6000, '注册后自动关闭');
+            // 重新打开 → 账号页 → 退出登录
+            await clickById(cdp, 'profileBtn');
+            await waitFor(cdp, `document.getElementById('profileOverlay').classList.contains('show')`, 5000, '资料弹窗2');
+            await clickById(cdp, 'tabAccount');
+            await clickById(cdp, 'acctLogoutBtn');
+            await waitFor(cdp, `!document.getElementById('accountState').textContent.includes('已登录')`, 8000, '退出后回游客');
+            await waitFor(cdp, `!document.getElementById('profileOverlay').classList.contains('show')`, 6000, '退出后自动关闭');
+        });
+
+        // ---------- C1 在线：断线自动重连回房 + 手动断开不重连 ----------
+        step('C1 在线断线自动重连、手动断开不重连', async () => {
+            await load(freshUrl('c1'));
+            await clickById(cdp, 'onlineModeBtn');
+            const room = 'rc_' + Date.now().toString(36);
+            await setValue(cdp, 'roomInput', room);
+            await waitFor(cdp, `!!localStorage.getItem('jtq-token')`, 8000, '游客身份就绪');
+            await clickById(cdp, 'connectBtn');
+            await waitFor(cdp, `['已进入房间','在线人数'].some(k=>document.getElementById('onlineTip').textContent.includes(k))`, 10000, '加入房间');
+            await sleep(800);
+            // 模拟意外断线（非用户主动）：直接关闭底层 socket → 应自动重连回原房间
+            const closed = await cdp.evalJS(`(()=>{try{onlineSocket.close();return 'ok'}catch(e){return 'ERR:'+e.message}})()`);
+            assert.equal(closed, 'ok', 'socket 可关闭');
+            await waitFor(cdp, `['已进入房间','在线人数'].some(k=>document.getElementById('onlineTip').textContent.includes(k))`, 20000, '自动重连回房');
+            assert.ok(!(await cdp.evalJS(`document.getElementById('onlineTip').textContent`)).includes('重连失败'), '未到达重连上限');
+            await sleep(1200);
+            // 手动断开：不应自动重连
+            await clickById(cdp, 'disconnectBtn');
+            await waitFor(cdp, `document.getElementById('onlineTip').textContent.includes('已手动断开')`, 5000, '手动断开');
+            const tip = await cdp.evalJS(`document.getElementById('onlineTip').textContent`);
+            await sleep(4000);
+            const tip2 = await cdp.evalJS(`document.getElementById('onlineTip').textContent`);
+            assert.equal(tip2, tip, '手动断开后不应自动重连');
+            assert.ok(!tip2.includes('自动重连'));
+        });
+
+        // ---------- D1 历史记录 + 对局回放（M2b） ----------
+        step('D1 在线对局自动存档可回放', async () => {
+            // 先真实录一盘：两个 ws 客户端加入房间，黑走一步后白认输
+            const mk = async () => {
+                const r = await fetch(BASE.replace('/index.html', '') + '/api/guest', { method: 'POST' });
+                return (await r.json()).token;
+            };
+            const conn = (token) => new Promise((resolve, reject) => {
+                const ws = new WebSocket(WS_BASE);
+                const inbox = [], wait = [];
+                ws.on('message', (d) => { const m = JSON.parse(d.toString()); const w = wait.shift(); if (w) w(m); else inbox.push(m); });
+                ws.once('open', () => resolve({
+                    ws, send: (o) => ws.send(JSON.stringify(o)),
+                    nextOf(type) {
+                        const take = () => { const m = inbox.shift(); if (m && m.type === type) return Promise.resolve(m); return Promise.resolve(wait.push) && nextOf.bind(this)(type); };
+                        return new Promise((res) => { const w = (m) => res(m); wait.push(w); const m = inbox.shift(); if (m) { wait.pop(); res(m.type === type ? m : undefined); } });
+                    },
+                }));
+                ws.once('error', reject);
+            });
+            const room = 'hist_' + Date.now().toString(36);
+            const tA = await mk(), tB = await mk();
+            const a = new WebSocket(WS_BASE); const b = new WebSocket(WS_BASE);
+            await new Promise((r) => { a.once('open', r); });
+            await new Promise((r) => { b.once('open', r); });
+            let aJoined = false, bJoined = false, bGotMove = false, aGotSur = false;
+            a.on('message', (d) => { const m = JSON.parse(d.toString()); if (m.type === 'joined') aJoined = true; if (m.type === 'surrender') aGotSur = true; });
+            b.on('message', (d) => { const m = JSON.parse(d.toString()); if (m.type === 'joined') bJoined = true; if (m.type === 'move') bGotMove = true; });
+            a.send(JSON.stringify({ type: 'join', roomId: room, token: tA }));
+            await (async () => { while (!aJoined) await sleep(50); })();
+            b.send(JSON.stringify({ type: 'join', roomId: room, token: tB }));
+            await (async () => { while (!bJoined) await sleep(50); })();
+            a.send(JSON.stringify({ type: 'move', roomId: room, move: { fx: 0, fy: 0, tx: 0, ty: 2 } }));
+            await (async () => { while (!bGotMove) await sleep(50); })();
+            b.send(JSON.stringify({ type: 'surrender', roomId: room, winnerPiece: 1 }));
+            await (async () => { while (!aGotSur) await sleep(50); })();
+            await sleep(200);
+            a.close(); b.close();
+
+            // 页面以参赛者 A 的身份打开历史（游客也只能看自己相关的对局）
+            await load(freshUrl('d1'));
+            await cdp.evalJS(`localStorage.setItem('jtq-token', ${JSON.stringify(tA)})`);
+            await load(freshUrl('d1b'));
+            await clickById(cdp, 'historyBtn');
+            await waitFor(cdp, `document.querySelectorAll('.history-row').length>0`, 8000, '历史列表非空');
+            const rows = await cdp.evalJS(`document.querySelectorAll('.history-row').length`);
+            assert.ok(rows >= 1, '应有已存档对局');
+            await cdp.evalJS(`document.querySelector('.history-row').click()`);
+            await waitFor(cdp, `document.getElementById('replayBar').style.display!=='none'`, 8000, '回放控制条出现');
+            assert.ok((await cdp.evalJS(`document.getElementById('rpInfo').textContent`)).includes('/'), '显示步数进度');
+            const info1 = await cdp.evalJS(`document.getElementById('rpInfo').textContent`);
+            await clickById(cdp, 'rpNext');
+            const info2 = await cdp.evalJS(`document.getElementById('rpInfo').textContent`);
+            assert.notEqual(info2, info1, '下一步更新进度');
+            await clickById(cdp, 'rpClose');
+            await waitFor(cdp, `document.getElementById('replayBar').style.display==='none'`, 5000, '退出回放');
+            assert.ok((await cdp.evalJS(`document.getElementById('status').textContent`)).includes('走棋'), '恢复普通对局界面');
         });
 
         // ---------- 汇总 ----------

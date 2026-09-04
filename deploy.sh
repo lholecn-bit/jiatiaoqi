@@ -147,6 +147,8 @@ server {
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
+        proxy_read_timeout 300s;   # 心跳已保活；超时放宽兜底
+        proxy_send_timeout 300s;
     }
 }
 EOF

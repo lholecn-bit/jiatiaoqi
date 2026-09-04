@@ -1,6 +1,6 @@
 {
   "name": "jiatiaoqi",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "private": true,
   "description": "夹挑棋 - 5×5 策略棋类游戏",
   "author": "Zhou Anchao <contact@jiatiaoqi.local>",
@@ -16,6 +16,7 @@
     "build:appimage": "electron-builder --linux AppImage"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -37,17 +38,32 @@
     ],
     "linux": {
       "target": [
-        { "target": "deb", "arch": ["x64"] },
-        { "target": "AppImage", "arch": ["x64"] }
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "category": "Game",
       "icon": "build/icon.png"
     },
     "deb": {
       "depends": [
-        "libgtk-3-0", "libnotify4", "libnss3",
-        "libxss1", "libxtst6", "xdg-utils",
-        "libatspi2.0-0", "libsecret-1-0"
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libsecret-1-0"
       ]
     }
   }

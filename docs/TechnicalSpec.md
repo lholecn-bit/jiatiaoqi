@@ -184,7 +184,62 @@
 
 ---
 
-## 10. 后续可扩展点
+## 10. 平台化层（M2，开发中，feat/m2）
+
+### 10.1 服务架构
+
+- `server.js`：单端口全功能入口（HTTP 静态 + REST `/api` + WebSocket `/ws`），启动时打开 SQLite
+- `shared/app.js`：应用工厂 `createApp({store, staticDir})`，便于测试进程内创建实例；内含 REST 路由、房间/对局逻辑与对局落库
+- `shared/db.js`：better-sqlite3 数据层，表：`players` / `sessions` / `games` / `moves`
+- `online-server.js` 保留为旧版 WS-only 服务（历史兼容，新功能以 server.js 为准）
+
+### 10.2 REST 接口
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | /api/guest | 创建游客身份，返回 token + player |
+| POST | /api/register | 游客升级账号（username + 密码盐哈希） |
+| POST | /api/login | 登录换新 token |
+| POST | /api/logout | 注销会话 |
+| GET | /api/me | 当前身份（Bearer token） |
+| PATCH | /api/profile | 更新 nick / avatar |
+| GET | /api/games | 对局列表（默认 50） |
+| GET | /api/games/:id | 对局详情 + moves（回放数据源） |
+
+### 10.3 在线对局存档
+### 10.4 在线保活与断线重连（修复"莫名断开"）
+
+- 根因：回合制对局空闲时无流量，Nginx `proxy_read_timeout`(60s 默认) 等网关会掐断连接
+- 服务端：`shared/heartbeat.js` 协议级心跳（默认 30s，`HEARTBEAT_INTERVAL` 可调），
+  持续保活 + 清理半开连接；对客户端应用层 `ping` 回 `pong`
+- 客户端：每 10s 应用层 ping、20s 无 pong 判定死链 → 指数退避自动重连
+  （1s→…→10s，最多 10 次）并自动重新加入原房间；用户主动断开/切模式不重连；
+  重连瞬时"房间已满"等竞态会自动续连
+- 部署：Nginx `/ws` 建议 `proxy_read_timeout 300s`（deploy.sh 已带）
+- 断线重连恢复棋局：房间保留期 `ROOM_KEEP_MS`（默认 5 分钟，0 关闭）——
+  房间无人时不立即删除，期内同身份重连回到原棋盘与行棋方；仅剩一方离开不再
+  结束对局（避免误标 abandoned），全部离开且超保留期才清理
+- 排障日志：`WS_LOG_FILE=/path/ws.log node server.js` 输出 JSONL（conn/join/move/close/hb-terminate/room-expired/error）
+
+
+- WebSocket `join` 消息携带 `token`，服务端校验身份并记录 `playerId`（黑/白）
+- 两名玩家到齐后自动创建 `games` 记录；每一步走子写入 `moves`
+- 结束时机：吃光 / 无路可走 / 认输 / 重开 / 玩家离开 分别落 `result + reason`
+- 前端首次进入自动 `POST /api/guest` 保持游客身份，资料保存双向同步（离线降级为本地）
+
+---
+
+### 10.5 历史记录与对局回放（M2b）
+
+- 数据源：games + moves（在线对局自动存档；本地对局不记录）
+- REST：`GET /api/games?limit=n`（默认 50）与 `GET /api/games/:id`（含 moves）
+- 前端「对局回放」：历史列表 → 点击某局在主棋盘回放：
+  - 由 moves 逐手重放（含夹/挑/连锁），帧序列在本地构建
+  - 控制条：首/上一步/播放暂停/下一步/末/变速(1x/2x)/退出
+  - 回放中锁棋盘与操作按钮；退出后恢复进入回放前的本地对局环境
+- 在线对局中不可打开回放（避免与服务端状态冲突）
+
+## 11. 后续可扩展点
 
 - AI 难度分级（随机/启发式/搜索）
 - 在线断线重连与局面恢复

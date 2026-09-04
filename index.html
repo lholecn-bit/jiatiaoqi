@@ -423,13 +423,18 @@
             grid-template-columns: repeat(6, 1fr);
             gap: 8px;
             margin: 6px 0 14px;
+            width: 340px;               /* 桌面端固定舒适宽度（手机端由媒体查询改 100%） */
+            max-width: 100%;
         }
         .avatar-grid button {
+            padding: 0;                 /* 关键：覆盖 .modal button 继承的 10px 26px，否则窄屏被撑爆溢出 */
+            min-width: 0;
             aspect-ratio: 1;
             border-radius: 50%;
             border: 2px solid rgba(255, 255, 255, 0.14);
             background: rgba(255, 255, 255, 0.06);
             font-size: 22px;
+            line-height: 1;
             cursor: pointer;
             transition: transform 0.12s, border-color 0.15s;
         }
@@ -437,6 +442,18 @@
         .avatar-grid button.selected {
             border-color: #f2c14e;
             box-shadow: 0 0 0 2px rgba(242, 193, 78, 0.35);
+        }
+        /* 窄屏（手机）：头像改 4 列，单格更大更好点按；弹窗拉满宽 */
+        @media (max-width: 430px) {
+            .modal {
+                width: min(92vw, 420px);
+            }
+            .avatar-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+                width: 100%;
+            }
+            .avatar-grid button { font-size: 24px; }
         }
         .modal input {
             width: 100%;
@@ -475,6 +492,82 @@
             transition: background 0.2s;
         }
         .btn-plain:hover { background: rgba(255, 255, 255, 0.08); }
+
+        /* ===== M2：账号面板 ===== */
+        .modal-overlay .modal { position: relative; }
+        .modal-x {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            width: 28px;
+            height: 28px;
+            border: 0;
+            border-radius: 50%;
+            background: transparent;
+            color: #8fa2c6;
+            font-size: 13px;
+            cursor: pointer;
+            line-height: 1;
+            transition: background 0.2s, color 0.2s;
+        }
+        .modal-x:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        [data-theme="light"] .modal-x { color: #8a7350; }
+        [data-theme="light"] .modal-x:hover { background: rgba(140, 110, 60, 0.12); color: #3c3426; }
+        .account-pane { margin-top: 16px; }
+        .account-pane hr {
+            border: 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            margin: 0 0 12px;
+        }
+        .account-state {
+            font-size: 12px;
+            color: #93a0b8;
+            margin-bottom: 10px;
+            line-height: 1.6;
+            min-height: 16px;
+        }
+        .account-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .account-row input { padding: 8px 10px; font-size: 13px; }
+        [data-theme="light"] .account-pane hr { border-top-color: rgba(140, 110, 60, 0.25); }
+        [data-theme="light"] .account-state { color: #8a7c60; }
+        /* ===== M2：页签（外观 / 账号）===== */
+        .tabbar {
+            display: flex;
+            gap: 2px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 3px;
+            border-radius: 10px;
+            margin-bottom: 14px;
+        }
+        .tab {
+            flex: 1;
+            border: 0;
+            background: transparent;
+            color: #97a0b4;
+            padding: 6px 0;
+            border-radius: 8px;
+            font-size: 13.5px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        .tab:hover { color: #eef1f8; }
+        .tab.active {
+            background: linear-gradient(180deg, #f4d485, #dcab4c);
+            color: #2b2010;
+            font-weight: 700;
+        }
+        [data-theme="light"] .tabbar {
+            background: rgba(255, 255, 255, 0.6);
+            border-color: rgba(140, 110, 60, 0.22);
+        }
+        [data-theme="light"] .tab { color: #6b5d43; }
+        [data-theme="light"] .tab:hover { color: #2f2410; }
 
         /* ===== 玩法教程 ===== */
         .tutorial-modal { width: min(480px, 92vw); }
@@ -652,6 +745,190 @@
             outline-offset: 2px;
         }
 
+        /* ===== 品字布局：标题在上，棋盘左 / 三个独立卡片右，整体等高 ===== */
+        /* 上口：朴素居中的标题区（无卡片底） */
+        .site-head {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 1160px;
+            box-sizing: border-box;
+            margin: 0 auto;
+            padding: 4px 16px 0;
+        }
+        .site-head h1 { margin: 0; }
+        .site-head #subtitle { margin: 6px 0 0; }
+        .game-layout {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            width: 100%;
+            max-width: 1160px;
+            margin: 6px auto 0;
+            padding: 0 14px;
+        }
+        .board-zone { display: flex; flex-direction: column; align-items: center; order: 3; }
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: min(340px, 94vw);
+            box-sizing: border-box;
+        }
+        /* 右侧三个独立卡片 */
+        .side-panel .side-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.045);
+            backdrop-filter: blur(6px);
+        }
+        .side-profile { padding: 10px 12px; }
+        .side-profile .profile-chip { font-size: 15px; padding: 6px 18px 6px 8px; }
+        .side-profile .profile-avatar { width: 30px; height: 30px; font-size: 18px; }
+        .side-state {
+            padding: 14px 14px 12px;
+            justify-content: center;
+            gap: 12px;
+        }
+        .side-state .score-bar { margin: 0; }
+        .side-state #status { margin: 0; }
+        .side-state .online-panel { margin: 0; width: 100%; }
+        .side-actions { padding: 12px 14px 14px; gap: 12px; }
+        .side-actions .mode-row { margin: 0; }
+        .side-actions .btn-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin: 0;
+            width: 100%;
+        }
+        .side-actions .btn-row button {
+            padding: 12px 4px;
+            font-size: 14px;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+        .board-zone .board-frame { margin: 0; }
+
+        /* 窄屏：身份/状态卡在上、棋盘居中、操作按钮沉到棋盘下方，保证首屏能看到棋盘
+           （display:contents 把三张卡片提升为 .game-layout 的直接参与排序项） */
+        @media (max-width: 999px) {
+            .side-panel { display: contents; }
+            .side-panel .side-box { width: min(340px, 94vw); }
+            .side-profile { order: 1; }
+            .side-state { order: 2; }
+            .side-actions { order: 4; }
+        }
+
+        @media (min-width: 1000px) {
+            .game-layout {
+                flex-direction: row;
+                justify-content: center;
+                align-items: stretch;
+            }
+            .board-zone { order: 0; }
+            .side-panel { order: 0; width: 320px; }
+            .side-state { flex: 1; justify-content: space-evenly; gap: 14px; }
+            /* 品字上口锚定棋盘：标题中线对齐棋盘中线。
+               棋盘块 530px（500 画布 + 28 内衬 + 2 边框），右栏 320px + 间隙 16px = 336px，
+               标题盒宽 530 并整体右让 336px 后，flex 居中位置恰使标题中线落在棋盘中线上 */
+            .site-head {
+                width: 530px;
+                max-width: none;
+                margin: 0 336px 0 0;
+            }
+        }
+
+        /* 标题与 slogan：上移并自然形成“品”字上部 */
+        body { padding-top: 12px; }
+        #subtitle { margin-top: 6px; }
+
+        [data-theme="light"] .side-panel .side-box {
+            border-color: rgba(140, 110, 60, 0.2);
+            background: rgba(255, 255, 255, 0.6);
+        }
+
+        .footer-sep { color: #6b7693; }
+        [data-theme="light"] .footer-sep { color: #a2947a; }
+
+        /* ===== M2b：历史列表 ===== */
+        .history-modal { width: min(520px, 94vw); }
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+            max-height: 46vh;
+            overflow-y: auto;
+        }
+        .history-row {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+            text-align: left;
+        }
+        .history-row:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(240, 199, 110, 0.5); }
+        .history-row .hr-main { min-width: 0; }
+        .history-row .hr-title { font-size: 14px; color: #eef1f8; }
+        .history-row .hr-sub { font-size: 12px; color: #93a0b8; margin-top: 2px; }
+        .history-row .hr-moves { font-size: 12px; color: #8fa2c6; }
+        .history-row .hr-result {
+            font-size: 12.5px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 999px;
+        }
+        .hr-result.win-black { background: rgba(20, 20, 26, 0.75); color: #fff; border: 1px solid #666; }
+        .hr-result.win-white { background: rgba(240, 240, 245, 0.9); color: #222; }
+        .hr-result.abandoned { background: rgba(255, 255, 255, 0.08); color: #9aa3b5; }
+        [data-theme="light"] .history-row {
+            border-color: rgba(140, 110, 60, 0.2);
+            background: rgba(255, 255, 255, 0.55);
+        }
+        [data-theme="light"] .history-row:hover { background: #fff; }
+        [data-theme="light"] .history-row .hr-title { color: #3c3426; }
+
+        /* ===== M2b：回放控制条 ===== */
+        .replay-bar {
+            position: fixed;
+            left: 50%;
+            bottom: 18px;
+            transform: translateX(-50%);
+            z-index: 120;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(240, 199, 110, 0.35);
+            background: rgba(16, 21, 36, 0.92);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.6);
+            max-width: 94vw;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .replay-info { font-size: 13px; color: #f0d060; white-space: nowrap; }
+        [data-theme="light"] .replay-bar {
+            background: rgba(255, 249, 234, 0.95);
+            border-color: rgba(176, 124, 31, 0.5);
+        }
+        [data-theme="light"] .replay-info { color: #a87216; }
+
         @media (prefers-reduced-motion: reduce) {
             #status::before { animation: none; }
             * { transition: none !important; animation: none !important; }
@@ -660,60 +937,79 @@
 </head>
 <body>
 
-<h1>夹挑棋</h1>
-<p id="subtitle">夹挑连锁 · 方寸制胜</p>
-
+<div class="site-head">
+    <h1>夹挑棋</h1>
+    <p id="subtitle">夹挑连锁 · 方寸制胜</p>
+</div>
 <button id="themeBtn" class="theme-btn" title="切换亮/暗主题" aria-label="切换亮/暗主题">🌙</button>
 
-<div class="userbar">
-    <button id="profileBtn" class="profile-chip" type="button">
-        <span id="profileAvatar" class="profile-avatar">🐯</span>
-        <span id="profileName" class="profile-name">游客</span>
-    </button>
-</div>
 
-<div class="score-bar">
-    <div class="side" id="blackSide">
-        <i class="dot black"></i>
-        <span>黑方: <b id="blackCount">5</b></span>
+<div class="game-layout">
+    <section class="board-zone">
+        <div class="board-frame">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+    </section>
+    <aside class="side-panel">
+    <div class="side-box side-profile">
+        <button id="profileBtn" class="profile-chip" type="button">
+            <span id="profileAvatar" class="profile-avatar">🐭</span>
+            <span id="profileName" class="profile-name">游客</span>
+        </button>
     </div>
-    <div class="side" id="whiteSide">
-        <i class="dot white"></i>
-        <span>白方: <b id="whiteCount">5</b></span>
+    <div class="side-box side-state">
+        <div class="score-bar">
+            <div class="side" id="blackSide">
+                <i class="dot black"></i>
+                <span>黑方: <b id="blackCount">5</b></span>
+            </div>
+            <div class="side" id="whiteSide">
+                <i class="dot white"></i>
+                <span>白方: <b id="whiteCount">5</b></span>
+            </div>
+        </div>
+        <div id="status">黑方走棋</div>
+        <div class="online-panel" id="onlinePanel">
+            <input id="roomInput" placeholder="房间号（如 1001）" />
+            <button id="connectBtn">连接房间</button>
+            <button id="disconnectBtn">断开连接</button>
+            <a id="advToggle" class="adv-toggle">高级设置 ▾</a>
+            <input id="serverInput" class="adv-hidden" placeholder="ws://127.0.0.1:8080" />
+            <div class="online-tip" id="onlineTip">未连接</div>
+        </div>
     </div>
-</div>
-
-<div id="status">黑方走棋</div>
-
-<div class="mode-row">
-    <button class="mode-btn active" id="pvpModeBtn">本地双人</button>
-    <button class="mode-btn" id="aiModeBtn">人机对战</button>
-    <button class="mode-btn" id="onlineModeBtn">在线对战</button>
-</div>
-
-<div class="online-panel" id="onlinePanel">
-    <input id="roomInput" placeholder="房间号（如 1001）" />
-    <button id="connectBtn">连接房间</button>
-    <button id="disconnectBtn">断开连接</button>
-    <a id="advToggle" class="adv-toggle">高级设置 ▾</a>
-    <input id="serverInput" class="adv-hidden" placeholder="ws://127.0.0.1:8080" />
-    <div class="online-tip" id="onlineTip">未连接</div>
-</div>
-
-<div class="board-frame">
-    <canvas id="gameCanvas"></canvas>
-</div>
-
-<div class="btn-row">
-    <button id="restartBtn">重新开始</button>
-    <button id="undoBtn">悔 棋</button>
-    <button id="surrenderBtn">认 输</button>
+    <div class="side-box side-actions">
+        <div class="mode-row">
+            <button class="mode-btn active" id="pvpModeBtn">本地双人</button>
+            <button class="mode-btn" id="aiModeBtn">人机对战</button>
+            <button class="mode-btn" id="onlineModeBtn">在线对战</button>
+        </div>
+        <div class="btn-row">
+            <button id="restartBtn">重新开始</button>
+            <button id="undoBtn">悔 棋</button>
+            <button id="surrenderBtn">认 输</button>
+        </div>
+    </div>
+</aside>
 </div>
 
 <footer class="app-footer">
     <button id="tutorialBtn" class="footer-link" type="button">玩法教程</button>
+    <span class="footer-sep">·</span>
+    <button id="historyBtn" class="footer-link" type="button">对局回放</button>
     <span id="appVersion" class="app-version"></span>
 </footer>
+
+<div id="replayBar" class="replay-bar" style="display:none">
+    <button id="rpFirst" class="btn-plain" type="button" title="首步">⏮</button>
+    <button id="rpPrev" class="btn-plain" type="button" title="上一步">◀</button>
+    <button id="rpToggle" class="btn-plain" type="button" title="播放/暂停">▶</button>
+    <button id="rpNext" class="btn-plain" type="button" title="下一步">▶</button>
+    <button id="rpLast" class="btn-plain" type="button" title="末步">⏭</button>
+    <button id="rpSpeed" class="btn-plain" type="button">1x</button>
+    <span id="rpInfo" class="replay-info"></span>
+    <button id="rpClose" class="btn-plain" type="button">退出回放 ✕</button>
+</div>
 
 <div id="overlay">
     <div class="modal">
@@ -724,12 +1020,44 @@
 
 <div id="profileOverlay" class="modal-overlay">
     <div class="modal">
-        <h2>我的名号</h2>
-        <div id="avatarGrid" class="avatar-grid"></div>
-        <input id="nickInput" maxlength="14" placeholder="给自己起个名字（可留空）" />
+        <button id="profileCloseX" class="modal-x" type="button" aria-label="关闭">✕</button>
+        <div class="tabbar" role="tablist">
+            <button id="tabAppearance" class="tab active" type="button" role="tab">外观</button>
+            <button id="tabAccount" class="tab" type="button" role="tab">账号</button>
+        </div>
+        <div id="panelAppearance">
+            <div id="guestHint" class="account-state" style="display:none"></div>
+            <div id="avatarGrid" class="avatar-grid"></div>
+            <input id="nickInput" maxlength="14" placeholder="给自己起个名字（可留空）" />
+            <div class="modal-actions">
+                <button id="profileCancelBtn" class="btn-plain" type="button">关 闭</button>
+                <button id="profileSaveBtn" type="button">保 存</button>
+            </div>
+        </div>
+        <div id="panelAccount" style="display:none">
+            <div id="accountState" class="account-state">正在连接服务…</div>
+            <div class="account-row">
+                <input id="acctUser" maxlength="20" placeholder="用户名（2-20 字符）" autocomplete="username" />
+                <input id="acctPass" type="password" maxlength="64" placeholder="密码（≥6 位）" autocomplete="current-password" />
+            </div>
+            <div class="modal-actions">
+                <button id="acctUpgradeBtn" class="btn-plain" type="button">注册（固定当前名号）</button>
+                <button id="acctLoginBtn" class="btn-plain" type="button">登 录</button>
+                <button id="acctLogoutBtn" class="btn-plain" type="button" style="display:none">退出登录</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="historyOverlay" class="modal-overlay">
+    <div class="modal history-modal">
+        <button id="historyCloseX" class="modal-x" type="button" aria-label="关闭">✕</button>
+        <h2>对局回放</h2>
+        <div class="account-state" style="min-height:0">对局为在线模式自动存档（本地对局不记录）。点击某一行开始回放。</div>
+        <div id="historyList" class="history-list"></div>
         <div class="modal-actions">
-            <button id="profileCancelBtn" class="btn-plain" type="button">取 消</button>
-            <button id="profileSaveBtn" type="button">保 存</button>
+            <button id="historyRefreshBtn" class="btn-plain" type="button">刷 新</button>
+            <button id="historyCloseBtn" class="btn-plain" type="button">关 闭</button>
         </div>
     </div>
 </div>
@@ -762,7 +1090,7 @@ const ANIM_CONVERT_HOLD = 520;
 const ANIM_STEP_GAP = 360;
 
 // 页面版本号：发版时与 package.json 的 version 同步修改（页面底部展示）
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '2.0.0';
 
 // ========== 主题（亮/暗）==========
 const THEME_KEY = 'jtq-theme';
@@ -786,7 +1114,41 @@ const PALETTES = {
     }
 };
 
-const AVATARS = ['🐯', '🦊', '🐼', '🐸', '🦁', '🐨', '🦉', '🐺', '🐵', '🐧', '🐙', '🐢'];
+// 十二生肖（子鼠丑牛寅虎卯兔辰龙巳蛇午马未羊申猴酉鸡戌狗亥猪）
+const AVATARS = ['🐭', '🐮', '🐯', '🐰', '🐲', '🐍', '🐴', '🐑', '🐵', '🐔', '🐶', '🐷'];
+
+// 头像集版本：1=旧动物集（🦊🐼🐸等），2=十二生肖。用于老用户本地存档一次性迁移。
+const AVATAR_SCHEMA = 2;
+// 旧头像索引 → 新索引（旧集里只有 🐯=0 和 🐵=8 在生肖中保留，其余回落默认 🐭）
+const AVATAR_MIGRATION = { 0: 2, 8: 8 };
+
+// ========== 游客随机名号（「A的B+生肖」，A/B 均褒义，随机组合不固定）==========
+const ZODIAC_NAMES = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
+// 前置褒义形容词
+const NAME_A = [
+    '聪明', '勇敢', '机灵', '可爱', '活泼', '善良', '乐观', '幽默', '帅气', '温柔',
+    '机智', '神勇', '聪慧', '灵巧', '威风', '淡定', '快乐', '勤奋', '自信', '优雅'
+];
+// 后置叠词（描写性情态，与生肖动物搭配读起来更俏皮）
+const NAME_B = [
+    '跳跳', '乖乖', '嘟嘟', '闪闪', '乐乐', '圆圆', '灵灵', '悠悠', '蹦蹦', '飞飞',
+    '亮亮', '甜甜', '快快', '暖暖', '美美', '壮壮', '帅帅', '聪聪', '萌萌', '酷酷'
+];
+
+function randomGuestName(avatarIndex) {
+    const a = NAME_A[Math.floor(Math.random() * NAME_A.length)];
+    let b;
+    do {
+        b = NAME_B[Math.floor(Math.random() * NAME_B.length)];
+    } while (a.includes(b[0])); // 避免「帅气的帅帅」「聪明的聪聪」这类同字重复
+    const z = ZODIAC_NAMES[avatarIndex] || ZODIAC_NAMES[0];
+    return a + '的' + b + z;
+}
+
+// 是否仍是自动生成格式（A的B+生肖）：换头像时此类名字的后缀生肖跟随新头像
+function isAutoName(name) {
+    return /^.+的.+[鼠牛虎兔龙蛇马羊猴鸡狗猪]$/.test(name);
+}
 
 // ========== DOM ==========
 const canvas = document.getElementById('gameCanvas');
@@ -827,6 +1189,41 @@ const tutNextBtnEl = document.getElementById('tutNextBtn');
 const tutSkipBtnEl = document.getElementById('tutSkipBtn');
 const tutorialBtnEl = document.getElementById('tutorialBtn');
 const undoBtnEl = document.getElementById('undoBtn');
+
+// M2：资料/账号页签
+const tabAppearanceEl = document.getElementById('tabAppearance');
+const tabAccountEl = document.getElementById('tabAccount');
+const panelAppearanceEl = document.getElementById('panelAppearance');
+const panelAccountEl = document.getElementById('panelAccount');
+const guestHintEl = document.getElementById('guestHint');
+
+// M2b：历史回放
+const historyBtnEl = document.getElementById('historyBtn');
+const historyOverlayEl = document.getElementById('historyOverlay');
+const historyListEl = document.getElementById('historyList');
+const historyRefreshBtnEl = document.getElementById('historyRefreshBtn');
+const historyCloseBtnEl = document.getElementById('historyCloseBtn');
+const replayBarEl = document.getElementById('replayBar');
+const rpInfoEl = document.getElementById('rpInfo');
+const rpFirstEl = document.getElementById('rpFirst');
+const rpPrevEl = document.getElementById('rpPrev');
+const rpToggleEl = document.getElementById('rpToggle');
+const rpNextEl = document.getElementById('rpNext');
+const rpLastEl = document.getElementById('rpLast');
+const rpSpeedEl = document.getElementById('rpSpeed');
+const rpCloseEl = document.getElementById('rpClose');
+
+// M2：账号 / 云端身份
+const TOKEN_KEY = 'jtq-token';
+const acctUserEl = document.getElementById('acctUser');
+const acctPassEl = document.getElementById('acctPass');
+const acctStateEl = document.getElementById('accountState');
+const acctUpgradeBtnEl = document.getElementById('acctUpgradeBtn');
+const acctLoginBtnEl = document.getElementById('acctLoginBtn');
+const acctLogoutBtnEl = document.getElementById('acctLogoutBtn');
+let currentToken = null;
+let accountInfo = null;
+try { currentToken = localStorage.getItem(TOKEN_KEY); } catch (e) {}
 
 // Hi-DPI
 const dpr = window.devicePixelRatio || 1;
@@ -890,8 +1287,19 @@ let onlineConnected = false;
 let onlineRoomId = '';
 let onlinePlayerColor = null;
 let onlinePlayersCount = 0;
+// 在线：心跳保活 + 断线自动重连
+let manualClose = false;        // 用户主动断开/切模式：禁止自动重连
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+let reconnectRoomId = '';
+let lastPongAt = 0;
+let pingTimer = null;
+const RECONNECT_MAX_ATTEMPTS = 10;
+const PING_INTERVAL = 10000;    // 客户端每 10s 发一次应用层 ping
+const PONG_TIMEOUT = 20000;     // 20s 未收到 pong 判定连接已死
+let pendingMyUndo = false;   // 在线：我刚走了最后一步且对方尚未行棋（此时可悔）
 let undoStack = [];          // 悔棋快照栈：{ b, p, last, mover }
-let profile = { avatar: 0, name: '' };
+let profile = { avatar: 0, name: '', v: AVATAR_SCHEMA };
 let tutIndex = 0;
 let tempAvatar = 0;
 
@@ -936,6 +1344,8 @@ function closeOnlineSocket() {
     onlineRoomId = '';
     onlinePlayerColor = null;
     onlinePlayersCount = 0;
+    pendingMyUndo = false;
+    syncUndoBtn();
 }
 
 function normalizeWsUrl(raw) {
@@ -952,7 +1362,7 @@ function maybeScheduleAi() {
 }
 
 async function applyRemoteMove(move) {
-    if (gameOver) return;
+    if (replayMode || gameOver) return;
     isAnimating = true;
     aiThinking = false;
     selPiece = null;
@@ -969,6 +1379,10 @@ function handleOnlineMessage(payload) {
     if (!payload || typeof payload !== 'object') return;
 
     if (payload.type === 'joined') {
+        // 连接成功（首次或重连）：复位重试状态
+        reconnectAttempts = 0;
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        pendingMyUndo = false;
         onlinePlayerColor = payload.color;
         onlineRoomId = payload.roomId;
         onlinePlayersCount = payload.players || 1;
@@ -1001,17 +1415,43 @@ function handleOnlineMessage(payload) {
     }
 
     if (payload.type === 'move') {
+        pendingMyUndo = false;   // 对方已行棋：不能再撤回自己上一步
+        syncUndoBtn();
         applyRemoteMove(payload.move);
         return;
     }
 
+    if (payload.type === 'undo') {
+        // 服务端权威：某方撤回自己刚走的一步
+        pendingMyUndo = false;
+        if (payload.board) {
+            board = payload.board;
+            curPlayer = payload.currentPlayer;
+            selPiece = null;
+            validMoves = [];
+            lastMove = null;
+            gameOver = false;
+            isAnimating = false;
+            animCapture = null;
+            overlayEl.classList.remove('show');
+            updatePieceCounts();
+            updateUI();
+            draw();
+        }
+        const who = payload.color === BLACK ? '黑方' : '白方';
+        setOnlineTip(`房间 ${onlineRoomId}：${who} 撤回了一步`);
+        return;
+    }
+
     if (payload.type === 'restart') {
+        pendingMyUndo = false;
         resetBoard();
         setOnlineTip(`房间 ${onlineRoomId}：对局已重开`);
         return;
     }
 
     if (payload.type === 'surrender') {
+        pendingMyUndo = false;
         const winnerPiece = payload.winnerPiece;
         endGame(payload.message || '对方认输，你获胜！', winnerPiece);
         draw();
@@ -1027,6 +1467,16 @@ function handleOnlineMessage(payload) {
         setOnlineTip(`房间 ${onlineRoomId}：对方已离开，等待重连`);
         return;
     }
+
+    if (payload.type === 'room-expired') {
+        // 服务端清理空闲房间：停止自动重连，避免反复重建空房间
+        manualClose = true;
+        reconnectRoomId = '';
+        stopPingTimer();
+        setOnlineTip(payload.message || '房间已关闭');
+        if (onlineSocket) onlineSocket.close();
+        return;
+    }
 }
 
 function sendOnlineMessage(payload) {
@@ -1034,36 +1484,48 @@ function sendOnlineMessage(payload) {
     onlineSocket.send(JSON.stringify(payload));
 }
 
-function connectOnlineRoom() {
-    if (gameMode !== 'online') {
-        setOnlineTip('请先切换到在线对战模式');
-        return;
-    }
+function startPingTimer() {
+    stopPingTimer();
+    pingTimer = setInterval(() => {
+        if (!onlineConnected || !onlineSocket) return;
+        if (Date.now() - lastPongAt > PONG_TIMEOUT) {
+            setOnlineTip('连接超时，正在重连...');
+            const sock = onlineSocket;
+            if (sock) sock.close(); // 触发 onclose → 自动重连
+            return;
+        }
+        sendOnlineMessage({ type: 'ping' });
+    }, PING_INTERVAL);
+}
 
-    const roomId = (roomInputEl.value || '').trim();
-    if (!roomId) {
-        setOnlineTip('请先输入房间号');
-        return;
-    }
+function stopPingTimer() {
+    if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+}
 
-    const wsUrl = normalizeWsUrl(serverInputEl.value);
-    closeOnlineSocket();
-    setOnlineTip('连接中...');
-
+// 建立一条新连接并加入房间（首次连接与断线重连共用）
+function openSocket(wsUrl, roomId) {
     const socket = new WebSocket(wsUrl);
     onlineSocket = socket;
 
     socket.onopen = () => {
         if (onlineSocket !== socket) return;
         setOnlineConnected(true);
+        lastPongAt = Date.now();
         setOnlineTip('已连接服务器，加入房间中...');
-        sendOnlineMessage({ type: 'join', roomId });
+        sendOnlineMessage({ type: 'join', roomId, token: currentToken || '' });
     };
 
     socket.onmessage = (event) => {
         if (onlineSocket !== socket) return;
         try {
             const payload = JSON.parse(event.data);
+            if (payload && payload.type === 'pong') { lastPongAt = Date.now(); return; }
+            // 重连竞态：旧连接未及清理导致“房间已满”等瞬时错误 → 关闭以触发下一次重连
+            if (payload && payload.type === 'error' && reconnectAttempts > 0) {
+                const sock = onlineSocket;
+                if (sock) sock.close();
+                return;
+            }
             handleOnlineMessage(payload);
         } catch (err) {
             setOnlineTip('收到无效消息');
@@ -1078,11 +1540,70 @@ function connectOnlineRoom() {
     socket.onclose = () => {
         if (onlineSocket !== socket) return;
         closeOnlineSocket();
-        if (gameMode === 'online') {
+        if (gameMode === 'online' && !manualClose && reconnectRoomId) {
+            scheduleReconnect();
+        } else if (gameMode === 'online') {
             setOnlineTip('连接已断开');
         }
         updateUI();
     };
+}
+
+// 断线自动重连（指数退避：1s→2s→4s…上限 10s，最多 10 次）
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+    if (reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
+        setOnlineTip('重连失败，请点击「连接房间」重新加入');
+        reconnectAttempts = 0;
+        return;
+    }
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+    reconnectAttempts++;
+    setOnlineTip(`连接断开，${Math.round(delay / 1000)} 秒后自动重连（第 ${reconnectAttempts} 次）...`);
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        if (gameMode !== 'online' || manualClose) return;
+        setOnlineTip('正在重连...');
+        openSocket(normalizeWsUrl(serverInputEl.value), reconnectRoomId);
+    }, delay);
+}
+
+// 用户主动断开（断开按钮/切模式）：停止自动重连
+function userDisconnect() {
+    manualClose = true;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    reconnectAttempts = 0;
+    stopPingTimer();
+    closeOnlineSocket();
+}
+
+async function connectOnlineRoom() {
+    if (gameMode !== 'online') {
+        setOnlineTip('请先切换到在线对战模式');
+        return;
+    }
+
+    const roomId = (roomInputEl.value || '').trim();
+    if (!roomId) {
+        setOnlineTip('请先输入房间号');
+        return;
+    }
+    // 确保已有游客/账号身份，避免 join 携带空 token 被服务端拒绝
+    if (!currentToken) {
+        const ok = await ensureIdentity();
+        if (!ok) {
+            setOnlineTip('无法创建身份，请检查网络后重试');
+            return;
+        }
+    }
+
+    manualClose = false;
+    reconnectAttempts = 0;
+    reconnectRoomId = roomId;
+    closeOnlineSocket();
+    setOnlineTip('连接中...');
+    startPingTimer();
+    openSocket(normalizeWsUrl(serverInputEl.value), roomId);
 }
 
 function resetBoard() {
@@ -1154,15 +1675,36 @@ function toggleTheme() {
 }
 
 // ========== M1：本地昵称与头像 ==========
+function isAccount() {
+    return !!(accountInfo && accountInfo.kind === 'account');
+}
+
+function clampAvatar(i) {
+    return Math.min(Math.max(Number(i) || 0, 0), AVATARS.length - 1);
+}
+
+function displayName() {
+    if (isAccount()) {
+        return profile.name.trim() ? profile.name : '@' + accountInfo.username;
+    }
+    return profile.name.trim() ? profile.name : '游客';
+}
+
 function loadProfile() {
+    // 游客：每次进入随机名号与头像，不落盘（固定名号需注册账号）
+    profile.avatar = Math.floor(Math.random() * AVATARS.length);
+    profile.name = randomGuestName(profile.avatar);
+    profile.v = AVATAR_SCHEMA;
+    accountInfo = null;
+    // 本机缓存过账号资料时先展示，随后 syncCloudProfile 用云端覆盖
     try {
         const raw = localStorage.getItem(PROFILE_KEY);
         if (raw) {
             const p = JSON.parse(raw);
-            profile = {
-                avatar: Number.isInteger(p.avatar) && p.avatar >= 0 && p.avatar < AVATARS.length ? p.avatar : 0,
-                name: typeof p.name === 'string' ? p.name.slice(0, 14) : ''
-            };
+            if (p && p.kind === 'account') {
+                profile.avatar = clampAvatar(p.avatar);
+                profile.name = String(p.name || '');
+            }
         }
     } catch (e) {}
 }
@@ -1170,7 +1712,30 @@ function loadProfile() {
 function renderProfile() {
     if (!profileAvatarEl || !profileNameEl) return;
     profileAvatarEl.textContent = AVATARS[profile.avatar] || AVATARS[0];
-    profileNameEl.textContent = profile.name.trim() ? profile.name : '游客';
+    profileNameEl.textContent = displayName();
+}
+
+function updateProfilePanelState() {
+    // 外观页顶部的身份提示 + 保存按钮语义
+    if (!guestHintEl || !profileSaveBtnEl) return;
+    if (isAccount()) {
+        guestHintEl.style.display = 'none';
+        profileSaveBtnEl.textContent = '保 存';
+    } else {
+        guestHintEl.style.display = '';
+        guestHintEl.textContent = '游客名号每次进入随机且不保存；注册账号后即可固定头像与昵称。';
+        profileSaveBtnEl.textContent = '注册并固定名号';
+    }
+}
+
+function switchProfileTab(tab) {
+    const appearance = tab === 'appearance';
+    tabAppearanceEl.classList.toggle('active', appearance);
+    tabAccountEl.classList.toggle('active', !appearance);
+    panelAppearanceEl.style.display = appearance ? '' : 'none';
+    panelAccountEl.style.display = appearance ? 'none' : '';
+    if (!appearance) renderAccount();
+    else updateProfilePanelState();
 }
 
 function openOverlay(el) { if (el) el.classList.add('show'); }
@@ -1178,7 +1743,7 @@ function closeOverlay(el) { if (el) el.classList.remove('show'); }
 
 function openProfileModal() {
     tempAvatar = profile.avatar;
-    nickInputEl.value = profile.name;
+    nickInputEl.value = displayName();
     avatarGridEl.innerHTML = '';
     AVATARS.forEach((emoji, i) => {
         const b = document.createElement('button');
@@ -1187,21 +1752,374 @@ function openProfileModal() {
         b.title = '头像 ' + (i + 1);
         if (i === tempAvatar) b.classList.add('selected');
         b.addEventListener('click', () => {
-            avatarGridEl.querySelectorAll('button').forEach(x => x.classList.remove('selected'));
+            avatarGridEl.querySelectorAll('button').forEach((x) => x.classList.remove('selected'));
             b.classList.add('selected');
             tempAvatar = i;
+            // 自动名（随机组合）切换头像时后缀生肖跟随
+            const cur = nickInputEl.value;
+            if (isAutoName(cur)) {
+                nickInputEl.value = cur.slice(0, -1) + (ZODIAC_NAMES[i] || ZODIAC_NAMES[0]);
+            }
         });
         avatarGridEl.appendChild(b);
     });
+    switchProfileTab('appearance');
+    updateProfilePanelState();
+    renderAccount();
     openOverlay(profileOverlayEl);
 }
 
-function saveProfile() {
+async function saveProfile() {
+    if (!isAccount()) {
+        // 游客不能固定名号：给出提示并引导到账号页
+        updateProfilePanelState();
+        switchProfileTab('account');
+        acctMsg('注册账号后即可固定当前头像与昵称');
+        return;
+    }
     profile.avatar = tempAvatar;
     profile.name = nickInputEl.value.trim().slice(0, 14);
-    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch (e) {}
+    const r = await apiCall('/api/profile', { method: 'PATCH', body: { nick: profile.name, avatar: profile.avatar } });
+    if (r.ok && r.data.player) {
+        profile.avatar = clampAvatar(r.data.player.avatar);
+        profile.name = r.data.player.nick || '';
+    }
+    saveAccountCache();
     renderProfile();
     closeOverlay(profileOverlayEl);
+}
+
+// ========== M2：账号 / 云端身份 ==========
+async function apiCall(pathname, opts = {}) {
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (currentToken) headers.Authorization = 'Bearer ' + currentToken;
+        const res = await fetch(pathname, {
+            method: opts.method || 'GET',
+            headers,
+            body: opts.body ? JSON.stringify(opts.body) : undefined,
+        });
+        let data = {};
+        try { data = await res.json(); } catch (e) {}
+        return { ok: res.ok, status: res.status, data };
+    } catch (e) {
+        return { ok: false, status: 0, offline: true, data: {} };
+    }
+}
+
+function saveToken(t) {
+    currentToken = t || null;
+    try {
+        if (currentToken) localStorage.setItem(TOKEN_KEY, currentToken);
+        else localStorage.removeItem(TOKEN_KEY);
+    } catch (e) {}
+}
+
+function saveAccountCache() {
+    try {
+        localStorage.setItem(PROFILE_KEY, JSON.stringify({
+            kind: 'account', v: AVATAR_SCHEMA, avatar: profile.avatar, name: profile.name,
+        }));
+    } catch (e) {}
+}
+
+function clearAccountCache() {
+    try { localStorage.removeItem(PROFILE_KEY); } catch (e) {}
+}
+
+async function ensureIdentity() {
+    if (currentToken) return true;
+    const r = await apiCall('/api/guest', { method: 'POST' });
+    if (r.ok && r.data.token) {
+        saveToken(r.data.token);
+        return true;
+    }
+    return false;
+}
+
+async function syncCloudProfile() {
+    if (!currentToken) return;
+    const r = await apiCall('/api/me');
+    if (!r.ok) {
+        if (r.status === 401) {
+            saveToken(null);
+            clearAccountCache();
+            accountInfo = null;
+            if (await ensureIdentity()) return syncCloudProfile();
+        }
+        return;
+    }
+    const me = r.data.player || {};
+    if (me.kind === 'account') {
+        accountInfo = me;
+        profile.name = me.nick || '';
+        profile.avatar = clampAvatar(me.avatar);
+        saveAccountCache();
+        renderProfile();
+    } else {
+        // 游客：保持本机随机名号（服务端游客仅用于对局归属，不参与显示）
+        accountInfo = null;
+    }
+    renderAccount();
+    updateProfilePanelState();
+}
+
+function renderAccount() {
+    if (!acctStateEl) return;
+    if (isAccount()) {
+        acctStateEl.textContent = '已登录：@' + accountInfo.username + '（昵称/头像云端同步，跨设备可用）';
+        acctLogoutBtnEl.style.display = '';
+        acctUpgradeBtnEl.disabled = true;
+        acctLoginBtnEl.disabled = true;
+    } else {
+        acctStateEl.textContent = '游客模式：名号每次进入随机；注册后固定并可跨设备使用。';
+        acctLogoutBtnEl.style.display = 'none';
+        acctUpgradeBtnEl.disabled = false;
+        acctLoginBtnEl.disabled = false;
+    }
+    if (!isAccount()) acctMsg(''); // 清掉上一条操作提示
+    updateProfilePanelState();
+}
+
+function acctMsg(text) {
+    if (acctStateEl) acctStateEl.textContent = text;
+}
+
+// 成功提示后自动关闭名号弹窗（注册/登录/退出）
+function acctDone(text) {
+    acctMsg(text);
+    setTimeout(() => closeOverlay(profileOverlayEl), 700);
+}
+
+async function acctRegister() {
+    const username = acctUserEl.value.trim();
+    const password = acctPassEl.value;
+    if (!username || password.length < 6) {
+        acctMsg('请填写用户名和至少 6 位密码');
+        return;
+    }
+    if (!currentToken && !(await ensureIdentity())) {
+        acctMsg('连接服务失败，请检查网络');
+        return;
+    }
+    const r = await apiCall('/api/register', {
+        method: 'POST',
+        body: { guestToken: currentToken, username, password },
+    });
+    if (!r.ok) { acctMsg(r.data.message || '注册失败'); return; }
+    accountInfo = { kind: 'account', username };
+    // 把当前（随机）名号/头像一并固定为账号资料
+    await apiCall('/api/profile', { method: 'PATCH', body: { nick: profile.name, avatar: profile.avatar } });
+    await syncCloudProfile();
+    acctDone('✅ 注册成功，当前名号已固定 @' + username);
+}
+
+async function acctLogin() {
+    const username = acctUserEl.value.trim();
+    const password = acctPassEl.value;
+    if (!username || !password) { acctMsg('请输入用户名与密码'); return; }
+    const r = await apiCall('/api/login', {
+        method: 'POST',
+        body: { username, password },
+    });
+    if (!r.ok) { acctMsg(r.data.message || '登录失败'); return; }
+    saveToken(r.data.token);
+    await syncCloudProfile();
+    acctDone('✅ 登录成功，欢迎回来 @' + username);
+}
+
+async function acctLogout() {
+    if (currentToken) await apiCall('/api/logout', { method: 'POST' });
+    saveToken(null);
+    accountInfo = null;
+    clearAccountCache();
+    if (await ensureIdentity()) await syncCloudProfile();
+    // 恢复游客随机名号
+    loadProfile();
+    renderProfile();
+    renderAccount();
+    updateProfilePanelState();
+    acctDone('已退出登录，游客模式（名号每次随机）');
+}
+
+// ========== M2b：历史记录与对局回放 ==========
+let replayMode = false;
+let replayFrames = [];
+let replayMeta = null;
+let replayIdx = 0;
+let replayTimer = null;
+let replaySpeed = 1;
+let envSave = null;   // 进入回放前保存的对局环境
+
+const REASON_TEXT = {
+    pieces: '吃光获胜',
+    nomove: '对方无子可动',
+    surrender: '认输',
+    leave: '对方离开',
+    restart: '重开',
+    idle: '超时关闭',
+};
+
+function playerLabel(p) {
+    return (p && p.nick) ? p.nick : '游客';
+}
+function resultBadge(g) {
+    if (g.result === 'black') return { text: '黑胜', cls: 'win-black' };
+    if (g.result === 'white') return { text: '白胜', cls: 'win-white' };
+    return { text: '未分胜负', cls: 'abandoned' };
+}
+
+async function openHistory() {
+    if (replayMode) return;
+    if (gameMode === 'online' && onlineConnected) {
+        setOnlineTip('在线对局中暂不能打开回放，请先断开');
+        return;
+    }
+    await loadHistory();
+    openOverlay(historyOverlayEl);
+}
+
+async function loadHistory() {
+    historyListEl.innerHTML = '<div class="account-state">加载中…</div>';
+    await ensureIdentity();
+    const r = await apiCall('/api/games?limit=50');
+    if (!r.ok) {
+        historyListEl.innerHTML = '<div class="account-state">获取历史失败（' + ((r.data && r.data.message) || '网络错误') + '）</div>';
+        return;
+    }
+    const games = (r.data && r.data.games) || [];
+    if (games.length === 0) {
+        historyListEl.innerHTML = '<div class="account-state">暂无对局记录（在线对战会自动存档）</div>';
+        return;
+    }
+    historyListEl.innerHTML = '';
+    games.forEach((g) => {
+        const row = document.createElement('div');
+        row.className = 'history-row';
+        const b = resultBadge(g);
+        const black = playerLabel({ nick: g.black_name });
+        const white = playerLabel({ nick: g.white_name });
+        const time = (g.started_at || '').replace('T', ' ').slice(0, 16);
+        row.innerHTML =
+            '<div class="hr-main"><div class="hr-title">黑 ' + black + ' vs 白 ' + white + '</div>' +
+            '<div class="hr-sub">房间 ' + g.room + ' · ' + time + ' · ' + (REASON_TEXT[g.reason] || g.reason || '') + '</div></div>' +
+            '<div class="hr-moves">' + (g.move_count || 0) + ' 手</div>' +
+            '<div class="hr-result ' + b.cls + '">' + b.text + '</div>';
+        row.addEventListener('click', () => openReplay(g.id));
+        historyListEl.appendChild(row);
+    });
+}
+
+async function openReplay(gameId) {
+    const r = await apiCall('/api/games/' + gameId);
+    if (!r.ok) { historyListEl.innerHTML = '<div class="account-state">读取对局失败</div>'; return; }
+    const game = r.data.game || {};
+    const moves = (r.data.moves || []).sort((a, b) => a.seq - b.seq);
+    replayFrames = buildReplayFrames(moves);
+    replayMeta = { game, moves };
+    replayIdx = 0;
+    replaySpeed = 1;
+    // 保存当前对局环境，退出回放时恢复
+    envSave = {
+        board: board.map((c) => c.slice()),
+        curPlayer, lastMove, gameOver,
+        selPiece, validMoves: validMoves.slice(),
+    };
+    closeOverlay(historyOverlayEl);
+    replayMode = true;
+    replayBarEl.style.display = 'flex';
+    rpSpeedEl.textContent = '1x';
+    rpToggleEl.textContent = '▶';
+    showReplay(0);
+}
+
+function buildReplayFrames(moves) {
+    const frames = [];
+    const b0 = Array.from({ length: GRID }, () => Array(GRID).fill(EMPTY));
+    for (let x = 0; x < GRID; x++) b0[x][0] = BLACK;
+    for (let x = 0; x < GRID; x++) b0[x][4] = WHITE;
+    frames.push({ b: b0.map((c) => c.slice()), cur: BLACK });
+    let cur = BLACK;
+    for (const mv of moves) {
+        const b = frames[frames.length - 1].b.map((c) => c.slice());
+        b[mv.fx][mv.fy] = EMPTY;
+        b[mv.tx][mv.ty] = mv.color;
+        let queue = [[mv.tx, mv.ty]];
+        while (queue.length > 0) {
+            const next = [], seen = new Set();
+            for (const [qx, qy] of queue) {
+                for (const [cx, cy] of findCapturesOnBoard(b, qx, qy, mv.color)) {
+                    const k = cx * GRID + cy;
+                    if (b[cx][cy] !== mv.color && !seen.has(k)) {
+                        seen.add(k);
+                        b[cx][cy] = mv.color;
+                        next.push([cx, cy]);
+                    }
+                }
+            }
+            queue = next;
+        }
+        cur = cur === BLACK ? WHITE : BLACK;
+        frames.push({ b: b.map((c) => c.slice()), cur, move: mv });
+    }
+    return frames;
+}
+
+function showReplay(i) {
+    replayIdx = Math.max(0, Math.min(i, replayFrames.length - 1));
+    const f = replayFrames[replayIdx];
+    board = f.b.map((c) => c.slice());
+    curPlayer = f.cur;
+    gameOver = false;
+    selPiece = null;
+    validMoves = [];
+    lastMove = f.move ? { fx: f.move.fx, fy: f.move.fy, tx: f.move.tx, ty: f.move.ty } : null;
+    updatePieceCounts();
+    const colorName = curPlayer === BLACK ? '黑方' : '白方';
+    statusEl.textContent = '回放中：第 ' + replayIdx + '/' + (replayFrames.length - 1) + ' 步';
+    blackSideEl.classList.toggle('active', curPlayer === BLACK);
+    whiteSideEl.classList.toggle('active', curPlayer === WHITE);
+    const g = replayMeta.game;
+    rpInfoEl.textContent = (g.result ? (g.result === 'black' ? '黑胜' : g.result === 'white' ? '白胜' : '平/中断') + ' · ' : '') +
+        (REASON_TEXT[g.reason] || '') + ' · ' + replayIdx + '/' + (replayFrames.length - 1);
+    draw();
+}
+
+function replayStep(delta) {
+    stopReplayTimer();
+    showReplay(replayIdx + delta);
+    if (replayIdx < replayFrames.length - 1) rpToggleEl.textContent = '▶';
+}
+
+function startReplayTimer() {
+    stopReplayTimer();
+    if (replayIdx >= replayFrames.length - 1) { rpToggleEl.textContent = '▶'; return; }
+    rpToggleEl.textContent = '⏸';
+    replayTimer = setInterval(() => {
+        if (replayIdx >= replayFrames.length - 1) { stopReplayTimer(); rpToggleEl.textContent = '▶'; return; }
+        showReplay(replayIdx + 1);
+    }, 950 / replaySpeed);
+}
+function stopReplayTimer() {
+    if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+}
+
+function closeReplay() {
+    stopReplayTimer();
+    replayMode = false;
+    replayBarEl.style.display = 'none';
+    if (envSave) {
+        board = envSave.board.map((c) => c.slice());
+        curPlayer = envSave.curPlayer;
+        lastMove = envSave.lastMove;
+        gameOver = envSave.gameOver;
+        selPiece = envSave.selPiece;
+        validMoves = envSave.validMoves.slice();
+    }
+    envSave = null;
+    updatePieceCounts();
+    updateUI();
+    draw();
 }
 
 // ========== M1：玩法教程 ==========
@@ -1288,14 +2206,29 @@ function restoreSnapshot(s) {
 }
 
 function syncUndoBtn() {
-    if (undoBtnEl) {
-        undoBtnEl.disabled = gameMode === 'online' || undoStack.length === 0 || gameOver || isAnimating;
+    if (!undoBtnEl) return;
+    if (gameMode === 'online') {
+        // 在线：仅当“我刚走了最后一步且对方尚未行棋”时可悔
+        const ok = onlineConnected && pendingMyUndo && !gameOver && !isAnimating
+            && onlineSocket && onlineSocket.readyState === WebSocket.OPEN;
+        undoBtnEl.disabled = !ok;
+        return;
     }
+    undoBtnEl.disabled = undoStack.length === 0 || gameOver || isAnimating;
 }
 
 function undoLastMove() {
+    if (replayMode) return;
     if (gameMode === 'online') {
-        setOnlineTip('在线对战暂不支持悔棋');
+        if (!pendingMyUndo) {
+            setOnlineTip('在线只能撤回自己刚走的最后一步（需在对方行棋前）');
+            return;
+        }
+        if (!onlineConnected || !onlineSocket) return;
+        pendingMyUndo = false;
+        syncUndoBtn();
+        setOnlineTip('正在撤回...');
+        sendOnlineMessage({ type: 'undo', roomId: onlineRoomId });
         return;
     }
     if (isAnimating || gameOver) return;
@@ -2104,7 +3037,7 @@ function draw() {
 // ========== Event Handlers ==========
 
 canvas.addEventListener('click', async (e) => {
-    if (gameOver || isAnimating || !isHumanTurn()) return;
+    if (replayMode || gameOver || isAnimating || !isHumanTurn()) return;
     const rect = canvas.getBoundingClientRect();
     const sx = (e.clientX - rect.left) * (CANVAS_CSS / rect.width);
     const sy = (e.clientY - rect.top) * (CANVAS_CSS / rect.height);
@@ -2128,6 +3061,8 @@ canvas.addEventListener('click', async (e) => {
                     roomId: onlineRoomId,
                     move: { fx: fromX, fy: fromY, tx: gx, ty: gy }
                 });
+                pendingMyUndo = true;   // 等待对方行棋前可悔
+                syncUndoBtn();
             } else {
                 await triggerAiMoveIfNeeded();
             }
@@ -2173,6 +3108,7 @@ canvas.addEventListener('mouseleave', () => {
 });
 
 document.getElementById('restartBtn').addEventListener('click', () => {
+    if (replayMode) return;
     if (gameMode === 'online' && onlineConnected) {
         sendOnlineMessage({ type: 'restart', roomId: onlineRoomId });
     }
@@ -2181,7 +3117,7 @@ document.getElementById('restartBtn').addEventListener('click', () => {
 });
 
 document.getElementById('surrenderBtn').addEventListener('click', () => {
-    if (gameOver || isAnimating) return;
+    if (replayMode || gameOver || isAnimating) return;
     const winnerPiece = curPlayer === BLACK ? WHITE : BLACK;
     const winner = curPlayer === BLACK ? '白方' : '黑方';
     if (gameMode === 'online' && onlineConnected) {
@@ -2197,6 +3133,7 @@ document.getElementById('surrenderBtn').addEventListener('click', () => {
 });
 
 document.getElementById('playAgainBtn').addEventListener('click', () => {
+    if (replayMode) return;
     if (gameMode === 'online' && onlineConnected) {
         sendOnlineMessage({ type: 'restart', roomId: onlineRoomId });
     }
@@ -2205,9 +3142,10 @@ document.getElementById('playAgainBtn').addEventListener('click', () => {
 });
 
 pvpModeBtn.addEventListener('click', () => {
+    if (replayMode) return;
     if (gameMode === 'pvp') return;
     if (gameMode === 'online') {
-        closeOnlineSocket();
+        userDisconnect();
         setOnlineTip('未连接');
     }
     gameMode = 'pvp';
@@ -2216,9 +3154,10 @@ pvpModeBtn.addEventListener('click', () => {
 });
 
 aiModeBtn.addEventListener('click', () => {
+    if (replayMode) return;
     if (gameMode === 'ai') return;
     if (gameMode === 'online') {
-        closeOnlineSocket();
+        userDisconnect();
         setOnlineTip('未连接');
     }
     gameMode = 'ai';
@@ -2228,6 +3167,7 @@ aiModeBtn.addEventListener('click', () => {
 });
 
 onlineModeBtn.addEventListener('click', () => {
+    if (replayMode) return;
     if (gameMode === 'online') return;
     gameMode = 'online';
     updateModeUI();
@@ -2240,7 +3180,7 @@ connectBtnEl.addEventListener('click', () => {
 });
 
 disconnectBtnEl.addEventListener('click', () => {
-    closeOnlineSocket();
+    userDisconnect();
     setOnlineTip('已手动断开');
     updateUI();
 });
@@ -2255,12 +3195,43 @@ themeBtnEl.addEventListener('click', toggleTheme);
 profileBtnEl.addEventListener('click', openProfileModal);
 profileSaveBtnEl.addEventListener('click', saveProfile);
 profileCancelBtnEl.addEventListener('click', () => closeOverlay(profileOverlayEl));
+document.getElementById('profileCloseX').addEventListener('click', () => closeOverlay(profileOverlayEl));
 nickInputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveProfile(); });
 tutorialBtnEl.addEventListener('click', openTutorial);
 tutPrevBtnEl.addEventListener('click', () => tutorialStep(-1));
 tutNextBtnEl.addEventListener('click', () => tutorialStep(1));
 tutSkipBtnEl.addEventListener('click', closeTutorial);
 undoBtnEl.addEventListener('click', undoLastMove);
+
+// ========== M2 事件 ==========
+acctUpgradeBtnEl.addEventListener('click', acctRegister);
+acctLoginBtnEl.addEventListener('click', acctLogin);
+acctLogoutBtnEl.addEventListener('click', acctLogout);
+acctPassEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') acctLogin(); });
+tabAppearanceEl.addEventListener('click', () => switchProfileTab('appearance'));
+tabAccountEl.addEventListener('click', () => switchProfileTab('account'));
+
+// ========== M2b 事件 ==========
+historyBtnEl.addEventListener('click', openHistory);
+historyCloseBtnEl.addEventListener('click', () => closeOverlay(historyOverlayEl));
+historyCloseX = document.getElementById('historyCloseX');
+if (historyCloseX) historyCloseX.addEventListener('click', () => closeOverlay(historyOverlayEl));
+historyRefreshBtnEl.addEventListener('click', loadHistory);
+rpFirstEl.addEventListener('click', () => { stopReplayTimer(); rpToggleEl.textContent = '▶'; showReplay(0); });
+rpPrevEl.addEventListener('click', () => replayStep(-1));
+rpNextEl.addEventListener('click', () => replayStep(1));
+rpLastEl.addEventListener('click', () => { stopReplayTimer(); rpToggleEl.textContent = '▶'; showReplay(replayFrames.length - 1); });
+rpToggleEl.addEventListener('click', () => {
+    if (replayIdx >= replayFrames.length - 1) { showReplay(0); }
+    if (replayTimer) { stopReplayTimer(); rpToggleEl.textContent = '▶'; }
+    else startReplayTimer();
+});
+rpSpeedEl.addEventListener('click', () => {
+    replaySpeed = replaySpeed === 1 ? 2 : 1;
+    rpSpeedEl.textContent = replaySpeed + 'x';
+    if (replayTimer) startReplayTimer();
+});
+rpCloseEl.addEventListener('click', closeReplay);
 
 // ========== Init ==========
 const appVersionEl = document.getElementById('appVersion');
@@ -2272,8 +3243,15 @@ buildLines();
 updateModeUI();
 setOnlineConnected(false);
 setOnlineTip('未连接');
+startPingTimer();
 resetBoard();
 syncUndoBtn();
+// M2：启动时确保游客身份并从云端拉取资料
+(async () => {
+    await ensureIdentity();
+    await syncCloudProfile();
+    renderAccount();
+})();
 // 首次进入自动弹出玩法教程（之后可点底部「玩法教程」再次学习）
 let tutDone = false;
 try { tutDone = !!localStorage.getItem(TUT_KEY); } catch (e) {}
