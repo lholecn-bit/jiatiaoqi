@@ -3,7 +3,7 @@
 // 前置：本地 server 已启动（默认 http://127.0.0.1:8080）
 'use strict';
 
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const WebSocket = require('ws');
 const assert = require('node:assert/strict');
 
@@ -136,6 +136,16 @@ async function main() {
     let cdp = null;
     const steps = [];
     const step = (name, fn) => steps.push({ name, fn });
+
+    // 前置：确保本地服务在线（不在则用 start-server.sh 拉起）
+    const up = await fetch(BASE).then(() => true).catch(() => false);
+    if (!up) {
+        execSync('./start-server.sh', { stdio: 'pipe' });
+        for (let i = 0; i < 30 && !up; i++) {
+            await sleep(300);
+            if (await fetch(BASE).then(() => true).catch(() => false)) break;
+        }
+    }
 
     const freshUrl = (tag) => `${BASE}?t=${tag}`;
 
@@ -295,6 +305,32 @@ async function main() {
             await clickById(cdp, 'acctLogoutBtn');
             await waitFor(cdp, `!document.getElementById('accountState').textContent.includes('已登录')`, 8000, '退出后回游客');
             await waitFor(cdp, `!document.getElementById('profileOverlay').classList.contains('show')`, 6000, '退出后自动关闭');
+        });
+
+        // ---------- C1 在线：断线自动重连回房 + 手动断开不重连 ----------
+        step('C1 在线断线自动重连、手动断开不重连', async () => {
+            await load(freshUrl('c1'));
+            await clickById(cdp, 'onlineModeBtn');
+            const room = 'rc_' + Date.now().toString(36);
+            await setValue(cdp, 'roomInput', room);
+            await waitFor(cdp, `!!localStorage.getItem('jtq-token')`, 8000, '游客身份就绪');
+            await clickById(cdp, 'connectBtn');
+            await waitFor(cdp, `['已进入房间','在线人数'].some(k=>document.getElementById('onlineTip').textContent.includes(k))`, 10000, '加入房间');
+            await sleep(800);
+            // 模拟意外断线（非用户主动）：直接关闭底层 socket → 应自动重连回原房间
+            const closed = await cdp.evalJS(`(()=>{try{onlineSocket.close();return 'ok'}catch(e){return 'ERR:'+e.message}})()`);
+            assert.equal(closed, 'ok', 'socket 可关闭');
+            await waitFor(cdp, `['已进入房间','在线人数'].some(k=>document.getElementById('onlineTip').textContent.includes(k))`, 20000, '自动重连回房');
+            assert.ok(!(await cdp.evalJS(`document.getElementById('onlineTip').textContent`)).includes('重连失败'), '未到达重连上限');
+            await sleep(1200);
+            // 手动断开：不应自动重连
+            await clickById(cdp, 'disconnectBtn');
+            await waitFor(cdp, `document.getElementById('onlineTip').textContent.includes('已手动断开')`, 5000, '手动断开');
+            const tip = await cdp.evalJS(`document.getElementById('onlineTip').textContent`);
+            await sleep(4000);
+            const tip2 = await cdp.evalJS(`document.getElementById('onlineTip').textContent`);
+            assert.equal(tip2, tip, '手动断开后不应自动重连');
+            assert.ok(!tip2.includes('自动重连'));
         });
 
         // ---------- 汇总 ----------

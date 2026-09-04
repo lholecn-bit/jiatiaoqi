@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
 const logic = require('./logic');
+const { attachHeartbeat } = require('./heartbeat');
 
 const { EMPTY, BLACK, WHITE, GRID } = logic;
 
@@ -20,6 +21,23 @@ const MIME = {
     '.db': 'application/octet-stream',
 };
 
+// ---------- WS 生命周期日志（云上排障用）----------
+// 开启方式：WS_LOG_FILE=/path/to/ws.log node server.js
+// 输出 JSONL：{ t, e, ... }；未指定文件时打到 stdout。
+function makeWsLogger() {
+    const file = process.env.WS_LOG_FILE;
+    const stream = file ? fs.createWriteStream(file, { flags: 'a' }) : null;
+    let seq = 0;
+    return {
+        log(e, data = {}) {
+            const line = JSON.stringify({ t: new Date().toISOString(), e, seq: ++seq, ...data });
+            if (stream) stream.write(line + '\n');
+            else console.log('[ws]', line);
+        },
+        close() { if (stream) stream.end(); },
+    };
+}
+
 function readBody(req) {
     return new Promise((resolve, reject) => {
         let raw = '';
@@ -31,10 +49,11 @@ function readBody(req) {
     });
 }
 
-function createApp({ store, staticDir }) {
+function createApp({ store, staticDir, heartbeatMs = 30000 }) {
     if (!store) throw new Error('store 必填');
     logic.buildLines(); // 初始化棋盘拓扑索引（幂等）
     const rooms = new Map();
+    const wsLog = makeWsLogger();
     const server = http.createServer((req, res) => {
         const u = new URL(req.url || '/', 'http://x');
         const pathname = decodeURIComponent(u.pathname);
@@ -208,11 +227,19 @@ function createApp({ store, staticDir }) {
 
     wss.on('connection', (ws) => {
         ws.meta = null;
+        ws._logId = ++connSeq;
+        wsLog.log('conn', { id: ws._logId, remote: (ws._socket && ws._socket.remoteAddress) || '' });
         send(ws, { type: 'hello', message: 'connected' });
 
         ws.on('message', (data) => {
             let p;
             try { p = JSON.parse(data.toString()); } catch (e) { return; }
+
+            // 应用层心跳：客户端探测连接存活，原样回 pong
+            if (p.type === 'ping') {
+                send(ws, { type: 'pong' });
+                return;
+            }
 
             if (p.type === 'join') {
                 const roomId = String(p.roomId || '').trim();
@@ -230,6 +257,7 @@ function createApp({ store, staticDir }) {
                 if (color == null) return send(ws, { type: 'error', message: '无法分配颜色' });
                 room.clients.add(ws);
                 ws.meta = { roomId, color, playerId: player.id };
+                wsLog.log('join', { id: ws._logId, room: roomId, color, player: player.id, players: room.clients.size });
                 send(ws, {
                     type: 'joined', roomId, color, players: room.clients.size,
                     board: room.board, currentPlayer: room.currentPlayer, nick: player.nick, avatar: player.avatar,
@@ -247,6 +275,7 @@ function createApp({ store, staticDir }) {
                 if (ws.meta.color !== room.currentPlayer) return send(ws, { type: 'error', message: '尚未轮到你' });
                 const r = applyMove(room, p.move || {}, ws.meta.color, ws);
                 if (!r.ok) return send(ws, { type: 'error', message: r.message });
+                wsLog.log('move', { id: ws._logId, room: room.roomId, color: ws.meta.color, move: p.move });
                 broadcastExcept(room, ws, { type: 'move', roomId: room.roomId, move: p.move, currentPlayer: room.currentPlayer, gameOver: room.gameOver });
             }
             if (p.type === 'restart') {
@@ -267,7 +296,12 @@ function createApp({ store, staticDir }) {
             }
         });
 
+        ws.on('error', (err) => {
+            wsLog.log('error', { id: ws._logId, message: err.message || String(err) });
+        });
+
         ws.on('close', () => {
+            wsLog.log('close', { id: ws._logId, room: ws.meta && ws.meta.roomId, color: ws.meta && ws.meta.color });
             if (!ws.meta || !ws.meta.roomId) return;
             const room = rooms.get(ws.meta.roomId);
             if (!room) return;
@@ -279,7 +313,19 @@ function createApp({ store, staticDir }) {
         });
     });
 
-    return { server, wss, rooms };
+    // 协议级心跳：默认 30s 保活 + 清理半开连接（可 0 关闭 / HEARTBEAT_INTERVAL 覆盖）
+    const heartbeatTimer = heartbeatMs > 0 ? attachHeartbeat(wss, heartbeatMs, {
+        onTerminate: (ws) => wsLog.log('hb-terminate', { id: ws._logId, room: ws.meta && ws.meta.roomId }),
+    }) : null;
+
+    return {
+        server, wss, rooms, heartbeatTimer, wsLog,
+        close() {
+            wsLog.close();
+        },
+    };
 }
+
+let connSeq = 0;
 
 module.exports = { createApp };

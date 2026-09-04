@@ -10,7 +10,11 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'jiatiaoqi.db');
 
 const store = openDb(DB_FILE);
-const app = createApp({ store, staticDir: __dirname });
+const app = createApp({
+    store,
+    staticDir: __dirname,
+    heartbeatMs: process.env.HEARTBEAT_INTERVAL ? Number(process.env.HEARTBEAT_INTERVAL) : 30000,
+});
 
 app.server.listen(PORT, () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);

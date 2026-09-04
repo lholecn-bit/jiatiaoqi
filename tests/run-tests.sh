@@ -5,15 +5,19 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-echo '[1/3] 规则逻辑单测（node:test + shared/logic.js）'
+echo '[1/4] 规则逻辑单测（node:test + shared/logic.js）'
 node --test tests/logic.test.js
 
 echo
-echo '[2/3] M2a API / 数据层 / 对局存档单测（进程内临时 SQLite）'
+echo '[2/4] M2a API / 数据层 / 对局存档单测（进程内临时 SQLite）'
 node --test tests/api.test.cjs
 
 echo
-echo '[3/3] M1 界面端到端（headless Chrome + CDP）'
+echo '[3/4] 在线断连复现与心跳保活模拟（进程内 + 空闲超时代理）'
+node --test tests/heartbeat-sim.cjs
+
+echo
+echo '[4/4] 界面端到端（headless Chrome + CDP，含断线自动重连）'
 node tests/ui-e2e.cjs
 
 echo

@@ -1171,6 +1171,16 @@ let onlineConnected = false;
 let onlineRoomId = '';
 let onlinePlayerColor = null;
 let onlinePlayersCount = 0;
+// 在线：心跳保活 + 断线自动重连
+let manualClose = false;        // 用户主动断开/切模式：禁止自动重连
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+let reconnectRoomId = '';
+let lastPongAt = 0;
+let pingTimer = null;
+const RECONNECT_MAX_ATTEMPTS = 10;
+const PING_INTERVAL = 10000;    // 客户端每 10s 发一次应用层 ping
+const PONG_TIMEOUT = 20000;     // 20s 未收到 pong 判定连接已死
 let undoStack = [];          // 悔棋快照栈：{ b, p, last, mover }
 let profile = { avatar: 0, name: '', v: AVATAR_SCHEMA };
 let tutIndex = 0;
@@ -1250,6 +1260,9 @@ function handleOnlineMessage(payload) {
     if (!payload || typeof payload !== 'object') return;
 
     if (payload.type === 'joined') {
+        // 连接成功（首次或重连）：复位重试状态
+        reconnectAttempts = 0;
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
         onlinePlayerColor = payload.color;
         onlineRoomId = payload.roomId;
         onlinePlayersCount = payload.players || 1;
@@ -1315,28 +1328,33 @@ function sendOnlineMessage(payload) {
     onlineSocket.send(JSON.stringify(payload));
 }
 
-function connectOnlineRoom() {
-    if (gameMode !== 'online') {
-        setOnlineTip('请先切换到在线对战模式');
-        return;
-    }
+function startPingTimer() {
+    stopPingTimer();
+    pingTimer = setInterval(() => {
+        if (!onlineConnected || !onlineSocket) return;
+        if (Date.now() - lastPongAt > PONG_TIMEOUT) {
+            setOnlineTip('连接超时，正在重连...');
+            const sock = onlineSocket;
+            if (sock) sock.close(); // 触发 onclose → 自动重连
+            return;
+        }
+        sendOnlineMessage({ type: 'ping' });
+    }, PING_INTERVAL);
+}
 
-    const roomId = (roomInputEl.value || '').trim();
-    if (!roomId) {
-        setOnlineTip('请先输入房间号');
-        return;
-    }
+function stopPingTimer() {
+    if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+}
 
-    const wsUrl = normalizeWsUrl(serverInputEl.value);
-    closeOnlineSocket();
-    setOnlineTip('连接中...');
-
+// 建立一条新连接并加入房间（首次连接与断线重连共用）
+function openSocket(wsUrl, roomId) {
     const socket = new WebSocket(wsUrl);
     onlineSocket = socket;
 
     socket.onopen = () => {
         if (onlineSocket !== socket) return;
         setOnlineConnected(true);
+        lastPongAt = Date.now();
         setOnlineTip('已连接服务器，加入房间中...');
         sendOnlineMessage({ type: 'join', roomId, token: currentToken || '' });
     };
@@ -1345,6 +1363,13 @@ function connectOnlineRoom() {
         if (onlineSocket !== socket) return;
         try {
             const payload = JSON.parse(event.data);
+            if (payload && payload.type === 'pong') { lastPongAt = Date.now(); return; }
+            // 重连竞态：旧连接未及清理导致“房间已满”等瞬时错误 → 关闭以触发下一次重连
+            if (payload && payload.type === 'error' && reconnectAttempts > 0) {
+                const sock = onlineSocket;
+                if (sock) sock.close();
+                return;
+            }
             handleOnlineMessage(payload);
         } catch (err) {
             setOnlineTip('收到无效消息');
@@ -1359,11 +1384,70 @@ function connectOnlineRoom() {
     socket.onclose = () => {
         if (onlineSocket !== socket) return;
         closeOnlineSocket();
-        if (gameMode === 'online') {
+        if (gameMode === 'online' && !manualClose && reconnectRoomId) {
+            scheduleReconnect();
+        } else if (gameMode === 'online') {
             setOnlineTip('连接已断开');
         }
         updateUI();
     };
+}
+
+// 断线自动重连（指数退避：1s→2s→4s…上限 10s，最多 10 次）
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+    if (reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
+        setOnlineTip('重连失败，请点击「连接房间」重新加入');
+        reconnectAttempts = 0;
+        return;
+    }
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+    reconnectAttempts++;
+    setOnlineTip(`连接断开，${Math.round(delay / 1000)} 秒后自动重连（第 ${reconnectAttempts} 次）...`);
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        if (gameMode !== 'online' || manualClose) return;
+        setOnlineTip('正在重连...');
+        openSocket(normalizeWsUrl(serverInputEl.value), reconnectRoomId);
+    }, delay);
+}
+
+// 用户主动断开（断开按钮/切模式）：停止自动重连
+function userDisconnect() {
+    manualClose = true;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    reconnectAttempts = 0;
+    stopPingTimer();
+    closeOnlineSocket();
+}
+
+async function connectOnlineRoom() {
+    if (gameMode !== 'online') {
+        setOnlineTip('请先切换到在线对战模式');
+        return;
+    }
+
+    const roomId = (roomInputEl.value || '').trim();
+    if (!roomId) {
+        setOnlineTip('请先输入房间号');
+        return;
+    }
+    // 确保已有游客/账号身份，避免 join 携带空 token 被服务端拒绝
+    if (!currentToken) {
+        const ok = await ensureIdentity();
+        if (!ok) {
+            setOnlineTip('无法创建身份，请检查网络后重试');
+            return;
+        }
+    }
+
+    manualClose = false;
+    reconnectAttempts = 0;
+    reconnectRoomId = roomId;
+    closeOnlineSocket();
+    setOnlineTip('连接中...');
+    startPingTimer();
+    openSocket(normalizeWsUrl(serverInputEl.value), roomId);
 }
 
 function resetBoard() {
@@ -2705,7 +2789,7 @@ document.getElementById('playAgainBtn').addEventListener('click', () => {
 pvpModeBtn.addEventListener('click', () => {
     if (gameMode === 'pvp') return;
     if (gameMode === 'online') {
-        closeOnlineSocket();
+        userDisconnect();
         setOnlineTip('未连接');
     }
     gameMode = 'pvp';
@@ -2716,7 +2800,7 @@ pvpModeBtn.addEventListener('click', () => {
 aiModeBtn.addEventListener('click', () => {
     if (gameMode === 'ai') return;
     if (gameMode === 'online') {
-        closeOnlineSocket();
+        userDisconnect();
         setOnlineTip('未连接');
     }
     gameMode = 'ai';
@@ -2738,7 +2822,7 @@ connectBtnEl.addEventListener('click', () => {
 });
 
 disconnectBtnEl.addEventListener('click', () => {
-    closeOnlineSocket();
+    userDisconnect();
     setOnlineTip('已手动断开');
     updateUI();
 });
@@ -2779,6 +2863,7 @@ buildLines();
 updateModeUI();
 setOnlineConnected(false);
 setOnlineTip('未连接');
+startPingTimer();
 resetBoard();
 syncUndoBtn();
 // M2：启动时确保游客身份并从云端拉取资料

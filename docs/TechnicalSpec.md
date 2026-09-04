@@ -207,6 +207,17 @@
 | GET | /api/games/:id | 对局详情 + moves（回放数据源） |
 
 ### 10.3 在线对局存档
+### 10.4 在线保活与断线重连（修复"莫名断开"）
+
+- 根因：回合制对局空闲时无流量，Nginx `proxy_read_timeout`(60s 默认) 等网关会掐断连接
+- 服务端：`shared/heartbeat.js` 协议级心跳（默认 30s，`HEARTBEAT_INTERVAL` 可调），
+  持续保活 + 清理半开连接；对客户端应用层 `ping` 回 `pong`
+- 客户端：每 10s 应用层 ping、20s 无 pong 判定死链 → 指数退避自动重连
+  （1s→…→10s，最多 10 次）并自动重新加入原房间；用户主动断开/切模式不重连；
+  重连瞬时"房间已满"等竞态会自动续连
+- 部署：Nginx `/ws` 建议 `proxy_read_timeout 300s`（deploy.sh 已带）
+- 排障日志：`WS_LOG_FILE=/path/ws.log node server.js` 输出 JSONL（conn/join/move/close/hb-terminate/error）
+
 
 - WebSocket `join` 消息携带 `token`，服务端校验身份并记录 `playerId`（黑/白）
 - 两名玩家到齐后自动创建 `games` 记录；每一步走子写入 `moves`

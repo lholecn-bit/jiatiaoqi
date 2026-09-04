@@ -231,7 +231,18 @@ sudo systemctl reload nginx
 - **生产 PM2**：`pm2 restart jiatiaoqi-ws` / `pm2 stop jiatiaoqi-ws`（见 4.2）
 - 前端改动无需重启服务，刷新浏览器即生效。
 
-### Q5：如何确认线上跑的是最新版？
+### Q5：在线对战为什么会"莫名断开"？如何根治？
+
+原因：回合制对局空闲时连接上没有流量，Nginx 默认 `proxy_read_timeout 60s` 会把
+WebSocket 掐断（间隔不固定，短则 1 分钟、长则十余分钟）。修复（feat/m2 已含）：
+
+- 服务端协议级心跳（30s，`HEARTBEAT_INTERVAL` 可调）持续保活 + 清理半开连接
+- 客户端 10s 应用层 ping 探活、断线指数退避自动重连并回原房间
+- Nginx `/ws` 建议超时放宽（`proxy_read_timeout 300s`，deploy.sh 已写入）
+
+排障：`WS_LOG_FILE=/var/log/jiatiaoqi-ws.log` 重启服务后，把该日志与现象时间点发我。
+
+### Q6：如何确认线上跑的是最新版？
 
 页面底部固定展示版本号「夹挑棋 vX.Y.Z」，用于核对线上代码新旧：
 
