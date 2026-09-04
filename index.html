@@ -745,7 +745,7 @@
             outline-offset: 2px;
         }
 
-        /* ===== 宽屏双栏布局（桌面棋盘左 / 控制台右） ===== */
+        /* ===== 宽屏双栏布局（桌面棋盘左 / 控制台右，垂直居中对齐） ===== */
         .game-layout {
             display: flex;
             flex-direction: column;
@@ -766,29 +766,49 @@
             order: 1;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            gap: 10px;
+            align-items: stretch;
+            gap: 12px;
             width: min(360px, 94vw);
-            padding: 16px 16px 14px;
+            padding: 18px 16px 16px;
             border-radius: 20px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(255, 255, 255, 0.04);
             backdrop-filter: blur(6px);
         }
-        .side-panel #status { margin: 0 0 2px; }
-        .side-panel .mode-row { margin-bottom: 6px; }
-        .side-panel .online-panel { margin-bottom: 0; width: 100%; }
-        .side-panel .btn-row { margin-top: 8px; }
+        .side-panel #status {
+            margin: 0;
+            text-align: center;
+        }
+        .side-panel .mode-row {
+            justify-content: center;
+            margin: 0;
+        }
+        .side-panel .online-panel {
+            margin-bottom: 0;
+            width: 100%;
+        }
         .board-zone .score-bar { margin: 4px 0 10px; }
         .board-zone .board-frame { margin: 0; }
 
+        /* 操作按钮：等宽三列一排，避免 2+1 换行 */
+        .side-panel .btn-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin: 2px 0 0;
+        }
+        .side-panel .btn-row button {
+            padding: 11px 4px;
+            font-size: 14px;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+
         @media (min-width: 1000px) {
-            .game-layout { flex-direction: row; justify-content: center; align-items: flex-start; }
+            .game-layout { flex-direction: row; justify-content: center; align-items: center; }
             .board-zone { order: 0; }
             .side-panel {
                 order: 0;
-                position: sticky;
-                top: 18px;
                 width: 330px;
             }
             .board-zone .score-bar { margin: 2px 0 10px; }
