@@ -95,12 +95,16 @@ function openDb(filePath) {
 
         // ---------- 账号 ----------
         registerGuest(guestToken, username, password) {
-            const salt = crypto.randomBytes(16).toString('hex');
-            const hash = hashPassword(password, salt);
-            const exists = db.prepare('SELECT id FROM players WHERE username = ?').get(username);
-            if (exists) return { ok: false, message: '该用户名已被注册' };
             const guest = this.playerByToken(guestToken);
             if (!guest) return { ok: false, message: '游客会话无效' };
+            // 仅游客身份可升级为账号；已登录账号不允许用自己的 token 覆盖账号
+            if (guest.kind !== 'guest') {
+                return { ok: false, message: '仅游客身份可以注册' };
+            }
+            const exists = db.prepare('SELECT id FROM players WHERE username = ?').get(username);
+            if (exists) return { ok: false, message: '该用户名已被注册' };
+            const salt = crypto.randomBytes(16).toString('hex');
+            const hash = hashPassword(password, salt);
             db.prepare(
                 `UPDATE players SET kind='account', username=?, pass_salt=?, pass_hash=?, updated_at=datetime('now') WHERE id=?`
             ).run(username, salt, hash, guest.id);
@@ -179,6 +183,21 @@ function openDb(filePath) {
         },
         getMoves(gameId) {
             return db.prepare('SELECT seq, color, fx, fy, tx, ty FROM moves WHERE game_id = ? ORDER BY seq').all(gameId);
+        },
+        // 过期清理：超期会话、以及无对局关联且超期的孤儿游客
+        pruneStale({ sessionDays = 30, guestDays = 30 } = {}) {
+            const now = Date.now();
+            const cutSession = new Date(now - sessionDays * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+            const cutGuest = new Date(now - guestDays * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+            const sessions = db.prepare('DELETE FROM sessions WHERE created_at < ?').run(cutSession).changes;
+            const guests = db.prepare(
+                `DELETE FROM players
+                 WHERE kind='guest' AND created_at < ?
+                   AND id NOT IN (SELECT black_player FROM games WHERE black_player IS NOT NULL)
+                   AND id NOT IN (SELECT white_player FROM games WHERE white_player IS NOT NULL)
+                   AND id NOT IN (SELECT player_id FROM sessions)`
+            ).run(cutGuest).changes;
+            return { sessions, guests };
         },
     };
     return store;

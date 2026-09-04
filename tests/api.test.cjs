@@ -90,7 +90,12 @@ test('游客注册升级账号 + 登录 + 错误密码', async () => {
     assert.equal(reg.status, 200);
     assert.equal(reg.data.ok, true);
 
-    const dup = await api('/api/register', { method: 'POST', body: { guestToken: g.data.token, username: 'alice_m2', password: 'secret123' } });
+    // 同一 token 已升级为账号：再注册属非法请求
+    const notGuest = await api('/api/register', { method: 'POST', body: { guestToken: g.data.token, username: 'alice_m2b', password: 'secret123' } });
+    assert.equal(notGuest.status, 400);
+    // 新游客抢注已存在的用户名 → 409
+    const g2 = await api('/api/guest', { method: 'POST' });
+    const dup = await api('/api/register', { method: 'POST', body: { guestToken: g2.data.token, username: 'alice_m2', password: 'secret123' } });
     assert.equal(dup.status, 409);
 
     const login = await api('/api/login', { method: 'POST', body: { username: 'alice_m2', password: 'secret123' } });
@@ -103,8 +108,11 @@ test('游客注册升级账号 + 登录 + 错误密码', async () => {
     assert.equal(wrong.status, 401);
 });
 
-test('资料更新走云端持久化', async () => {
+test('资料仅账号可改：游客 403，注册账号后云端持久化', async () => {
     const g = await api('/api/guest', { method: 'POST' });
+    const guestPatch = await api('/api/profile', { method: 'PATCH', token: g.data.token, body: { nick: 'x', avatar: 1 } });
+    assert.equal(guestPatch.status, 403, '游客不能改云端资料');
+    await api('/api/register', { method: 'POST', body: { guestToken: g.data.token, username: 'prof_user', password: 'secret123' } });
     const pf = await api('/api/profile', { method: 'PATCH', token: g.data.token, body: { nick: '小云', avatar: 7 } });
     assert.equal(pf.status, 200);
     assert.equal(pf.data.player.nick, '小云');

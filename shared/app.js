@@ -39,6 +39,24 @@ function makeWsLogger() {
     };
 }
 
+function isSensitivePath(p) {
+    if (/^\/api(?:\/|$)/.test(p)) return false;
+    if (p === '/' || p === '/index.html') return false;
+    // 隐藏文件/目录
+    if (/\/(\.[^/]+)/.test(p) || /^\.[^/]*$/.test(p.split('/').pop() || '')) return true;
+    const lower = p.toLowerCase();
+    for (const pre of ['/shared/', '/tests/', '/node_modules/', '/minigame/', '/archive/',
+        '/patent/', '/docs/', '/.git/', '/build/']) {
+        if (lower.startsWith(pre)) return true;
+    }
+    const base = (p.split('/').pop() || '').toLowerCase();
+    if (/\/?(jiatiaoqi\.db|\.db(-wal|-shm)?|\.db$)/.test(base)) return true;
+    if (/\.sh$|\.key$|private\.config|\.env(\.|$)|package-lock\.json/.test(base)) return true;
+    if (['server.js', 'online-server.js', 'electron-main.js', 'deploy.sh', 'release.sh',
+        'update.sh', 'start-server.sh', 'stop-server.sh', 'restart-server.sh'].includes(base)) return true;
+    return false;
+}
+
 function readBody(req) {
     return new Promise((resolve, reject) => {
         let raw = '';
@@ -50,7 +68,7 @@ function readBody(req) {
     });
 }
 
-function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000, roomIdleMs = 1800000, sweepMs = 30000 }) {
+function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000, roomIdleMs = 1800000, sweepMs = 30000, loginMaxFails = 8, loginLockMs = 900000, pruneMs = 21600000 }) {
     if (!store) throw new Error('store 必填');
     logic.buildLines(); // 初始化棋盘拓扑索引（幂等）
     const rooms = new Map();
@@ -65,6 +83,9 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
         }
 
         // ---------- 静态文件 ----------
+        if (isSensitivePath(pathname)) {
+            res.writeHead(404); res.end('Not Found'); return;
+        }
         let filePath = pathname === '/' ? '/index.html' : pathname;
         filePath = path.normalize(filePath).replace(/^(\.\.(\/|\\|$))+/, '');
         const fullPath = path.join(staticDir, filePath);
@@ -79,6 +100,24 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
     });
 
     // ---------- REST API ----------
+    // 登录/注册暴力破解限流（按 IP+用户名，配置可调）
+    const loginFails = new Map();
+    function authKey(req, user) {
+        const ip = (req.socket && req.socket.remoteAddress) || '';
+        return (ip + '|' + String(user || '').toLowerCase());
+    }
+    function noteAuthFail(key) {
+        const e = loginFails.get(key) || { count: 0, until: 0 };
+        e.count += 1;
+        if (e.count >= loginMaxFails) { e.until = Date.now() + loginLockMs; e.count = 0; }
+        loginFails.set(key, e);
+    }
+    function authLocked(key) {
+        const e = loginFails.get(key);
+        return e && e.until > Date.now() ? e.until : 0;
+    }
+    function clearAuthFails(key) { loginFails.delete(key); }
+
     function json(res, code, data) {
         res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(data));
@@ -102,13 +141,28 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 if (pass.length < 6 || pass.length > 64) return json(res, 400, { message: '密码需 6~64 个字符' });
                 if (!/^[A-Za-z0-9_\u4e00-\u9fa5]+$/.test(name)) return json(res, 400, { message: '用户名只能含中英文、数字、下划线' });
                 const r = store.registerGuest(String(b.guestToken || ''), name, pass);
-                if (!r.ok) return json(res, 409, { message: r.message });
+                if (!r.ok) {
+                    // 非游客身份注册属请求非法(400)；用户名冲突才 409
+                    const code = r.message.indexOf('游客') >= 0 ? 400 : 409;
+                    return json(res, code, { message: r.message });
+                }
                 return json(res, 200, { ok: true });
             }
             if (req.method === 'POST' && pathname === '/api/login') {
                 const b = await readBody(req);
-                const r = store.login(String(b.username || '').trim(), String(b.password || ''));
-                if (!r.ok) return json(res, 401, { message: r.message });
+                const username = String(b.username || '').trim();
+                const key = authKey(req, username);
+                const lockedUntil = authLocked(key);
+                if (lockedUntil) {
+                    res.setHeader('Retry-After', Math.max(1, Math.ceil((lockedUntil - Date.now()) / 1000)));
+                    return json(res, 429, { message: '尝试过于频繁，请稍后再试' });
+                }
+                const r = store.login(username, String(b.password || ''));
+                if (!r.ok) {
+                    noteAuthFail(key);
+                    return json(res, 401, { message: r.message });
+                }
+                clearAuthFails(key);
                 return json(res, 200, { token: r.token, player: r.player });
             }
             if (req.method === 'POST' && pathname === '/api/logout') {
@@ -126,6 +180,9 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 return json(res, 200, { player: me });
             }
             if (req.method === 'PATCH' && pathname === '/api/profile') {
+                if (me.kind !== 'account') {
+                    return json(res, 403, { message: '请先注册账号（游客资料不持久化）' });
+                }
                 const b = await readBody(req);
                 const player = store.updateProfile(me.id, { nick: b.nick, avatar: b.avatar });
                 return json(res, 200, { player });
@@ -405,8 +462,22 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
         if (typeof idleSweepTimer.unref === 'function') idleSweepTimer.unref();
     }
 
+    // 定期清理过期会话与孤儿游客（默认 6 小时一次，pruneMs=0 关闭）
+    let pruneTimer = null;
+    if (pruneMs > 0 && typeof store.pruneStale === 'function') {
+        pruneTimer = setInterval(() => {
+            try {
+                const r = store.pruneStale({ sessionDays: 30, guestDays: 30 });
+                if ((r.sessions || 0) + (r.guests || 0) > 0) wsLog.log('prune', r);
+            } catch (e) {
+                wsLog.log('prune-error', { message: e.message || String(e) });
+            }
+        }, pruneMs);
+        if (typeof pruneTimer.unref === 'function') pruneTimer.unref();
+    }
+
     return {
-        server, wss, rooms, heartbeatTimer, idleSweepTimer, wsLog,
+        server, wss, rooms, heartbeatTimer, idleSweepTimer, pruneTimer, wsLog,
         close() {
             wsLog.close();
         },
