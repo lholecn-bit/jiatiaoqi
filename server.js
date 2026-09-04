@@ -15,6 +15,7 @@ const app = createApp({
     staticDir: __dirname,
     heartbeatMs: process.env.HEARTBEAT_INTERVAL ? Number(process.env.HEARTBEAT_INTERVAL) : 30000,
     roomKeepMs: process.env.ROOM_KEEP_MS ? Number(process.env.ROOM_KEEP_MS) : 300000,
+    roomIdleMs: process.env.ROOM_IDLE_MS ? Number(process.env.ROOM_IDLE_MS) : 1800000,
 });
 
 app.server.listen(PORT, () => {

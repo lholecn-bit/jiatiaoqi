@@ -49,7 +49,7 @@ function readBody(req) {
     });
 }
 
-function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000 }) {
+function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000, roomIdleMs = 1800000, sweepMs = 30000 }) {
     if (!store) throw new Error('store 必填');
     logic.buildLines(); // 初始化棋盘拓扑索引（幂等）
     const rooms = new Map();
@@ -153,6 +153,13 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000 
     function broadcast(room, payload) { for (const c of room.clients) send(c, payload); }
     function broadcastExcept(room, ex, payload) { for (const c of room.clients) if (c !== ex) send(c, payload); }
 
+    // 直接清理房间（通知类清理场景用：取消保留期定时器、补终局记录、删除）
+    function cleanupRoom(room, reason) {
+        cancelRoomExpiry(room);
+        if (room.expireTimer) { clearTimeout(room.expireTimer); room.expireTimer = null; }
+        finalizeRoomGame(room, 'abandoned', reason);
+        rooms.delete(room.roomId);
+    }
     // 房间保留期：无人连接时不立即删除，短暂断线可在期内重连恢复棋局
     function scheduleRoomExpiry(room) {
         if (room.expireTimer) clearTimeout(room.expireTimer);
@@ -266,13 +273,14 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000 
                 if (!player) return send(ws, { type: 'error', message: '身份无效，请刷新页面重试' });
                 let room = rooms.get(roomId);
                 if (!room) {
-                    room = { roomId, clients: new Set(), board: logic.initialBoard(), currentPlayer: BLACK, gameOver: false, gameId: null, moveSeq: 0, finalized: false, expireTimer: null };
+                    room = { roomId, clients: new Set(), board: logic.initialBoard(), currentPlayer: BLACK, gameOver: false, gameId: null, moveSeq: 0, finalized: false, expireTimer: null, lastActive: Date.now() };
                     rooms.set(roomId, room);
                 }
                 if (room.clients.size >= 2) return send(ws, { type: 'error', message: '房间已满' });
                 const color = chooseColor(room);
                 if (color == null) return send(ws, { type: 'error', message: '无法分配颜色' });
                 cancelRoomExpiry(room);
+                room.lastActive = Date.now();
                 room.clients.add(ws);
                 ws.meta = { roomId, color, playerId: player.id };
                 wsLog.log('join', { id: ws._logId, room: roomId, color, player: player.id, players: room.clients.size });
@@ -293,6 +301,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000 
                 if (ws.meta.color !== room.currentPlayer) return send(ws, { type: 'error', message: '尚未轮到你' });
                 const r = applyMove(room, p.move || {}, ws.meta.color, ws);
                 if (!r.ok) return send(ws, { type: 'error', message: r.message });
+                room.lastActive = Date.now();
                 wsLog.log('move', { id: ws._logId, room: room.roomId, color: ws.meta.color, move: p.move });
                 broadcastExcept(room, ws, { type: 'move', roomId: room.roomId, move: p.move, currentPlayer: room.currentPlayer, gameOver: room.gameOver });
             }
@@ -305,11 +314,13 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000 
                 room.moveSeq = 0;
                 room.finalized = false;
                 ensureGame(room);
+                room.lastActive = Date.now();
                 broadcastExcept(room, ws, { type: 'restart', roomId: room.roomId, board: room.board, currentPlayer: room.currentPlayer });
             }
             if (p.type === 'surrender') {
                 finalizeRoomGame(room, p.winnerPiece === BLACK ? 'black' : (p.winnerPiece === WHITE ? 'white' : 'black'), 'surrender');
                 room.gameOver = true;
+                room.lastActive = Date.now();
                 broadcastExcept(room, ws, { type: 'surrender', roomId: room.roomId, winnerPiece: p.winnerPiece, message: p.message || '一方认输' });
             }
         });
@@ -340,8 +351,30 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000 
         onTerminate: (ws) => wsLog.log('hb-terminate', { id: ws._logId, room: ws.meta && ws.meta.roomId }),
     }) : null;
 
+    // 空闲房间清理：非对局中的房间（等人/只剩一方/已终局）超过 ROOM_IDLE_MS
+    // 无活动则通知并清理，避免“有人一直挂着”造成房间/内存泄漏
+    let idleSweepTimer = null;
+    if (roomIdleMs > 0) {
+        idleSweepTimer = setInterval(() => {
+            const now = Date.now();
+            for (const room of rooms.values()) {
+                if (room.clients.size === 0) continue; // 由保留期逻辑处理
+                const inProgress = room.gameId != null && !room.gameOver && room.clients.size >= 2;
+                if (inProgress) continue; // 对弈中的房间不清理（允许长考）
+                if (now - (room.lastActive || now) <= roomIdleMs) continue;
+                wsLog.log('room-idle-expire', { room: room.roomId, clients: room.clients.size });
+                try {
+                    room.clients.forEach((c) => send(c, { type: 'room-expired', message: '房间长时间无对局活动，已自动关闭' }));
+                } catch (e) {}
+                cleanupRoom(room, 'idle');
+                room.clients.forEach((c) => { try { c.close(4001, 'idle'); } catch (e) {} });
+            }
+        }, sweepMs);
+        if (typeof idleSweepTimer.unref === 'function') idleSweepTimer.unref();
+    }
+
     return {
-        server, wss, rooms, heartbeatTimer, wsLog,
+        server, wss, rooms, heartbeatTimer, idleSweepTimer, wsLog,
         close() {
             wsLog.close();
         },

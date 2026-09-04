@@ -1321,6 +1321,16 @@ function handleOnlineMessage(payload) {
         setOnlineTip(`房间 ${onlineRoomId}：对方已离开，等待重连`);
         return;
     }
+
+    if (payload.type === 'room-expired') {
+        // 服务端清理空闲房间：停止自动重连，避免反复重建空房间
+        manualClose = true;
+        reconnectRoomId = '';
+        stopPingTimer();
+        setOnlineTip(payload.message || '房间已关闭');
+        if (onlineSocket) onlineSocket.close();
+        return;
+    }
 }
 
 function sendOnlineMessage(payload) {
