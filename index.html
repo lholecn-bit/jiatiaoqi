@@ -745,6 +745,60 @@
             outline-offset: 2px;
         }
 
+        /* ===== 宽屏双栏布局（桌面棋盘左 / 控制台右） ===== */
+        .game-layout {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            max-width: 1200px;
+            margin: 4px auto 0;
+            padding: 0 14px;
+        }
+        .board-zone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            order: 2;
+        }
+        .side-panel {
+            order: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            width: min(360px, 94vw);
+            padding: 16px 16px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(6px);
+        }
+        .side-panel #status { margin: 0 0 2px; }
+        .side-panel .mode-row { margin-bottom: 6px; }
+        .side-panel .online-panel { margin-bottom: 0; width: 100%; }
+        .side-panel .btn-row { margin-top: 8px; }
+        .board-zone .score-bar { margin: 4px 0 10px; }
+        .board-zone .board-frame { margin: 0; }
+
+        @media (min-width: 1000px) {
+            .game-layout { flex-direction: row; justify-content: center; align-items: flex-start; }
+            .board-zone { order: 0; }
+            .side-panel {
+                order: 0;
+                position: sticky;
+                top: 18px;
+                width: 330px;
+            }
+            .board-zone .score-bar { margin: 2px 0 10px; }
+        }
+
+        [data-theme="light"] .side-panel {
+            border-color: rgba(140, 110, 60, 0.2);
+            background: rgba(255, 255, 255, 0.55);
+        }
+
         @media (prefers-reduced-motion: reduce) {
             #status::before { animation: none; }
             * { transition: none !important; animation: none !important; }
@@ -765,6 +819,8 @@
     </button>
 </div>
 
+<div class="game-layout">
+    <section class="board-zone">
 <div class="score-bar">
     <div class="side" id="blackSide">
         <i class="dot black"></i>
@@ -775,15 +831,16 @@
         <span>白方: <b id="whiteCount">5</b></span>
     </div>
 </div>
-
+<div class="board-frame">
+    <canvas id="gameCanvas"></canvas>
+</div>    </section>
+    <aside class="side-panel">
 <div id="status">黑方走棋</div>
-
 <div class="mode-row">
     <button class="mode-btn active" id="pvpModeBtn">本地双人</button>
     <button class="mode-btn" id="aiModeBtn">人机对战</button>
     <button class="mode-btn" id="onlineModeBtn">在线对战</button>
 </div>
-
 <div class="online-panel" id="onlinePanel">
     <input id="roomInput" placeholder="房间号（如 1001）" />
     <button id="connectBtn">连接房间</button>
@@ -792,16 +849,13 @@
     <input id="serverInput" class="adv-hidden" placeholder="ws://127.0.0.1:8080" />
     <div class="online-tip" id="onlineTip">未连接</div>
 </div>
-
-<div class="board-frame">
-    <canvas id="gameCanvas"></canvas>
-</div>
-
 <div class="btn-row">
     <button id="restartBtn">重新开始</button>
     <button id="undoBtn">悔 棋</button>
     <button id="surrenderBtn">认 输</button>
+</div>    </aside>
 </div>
+
 
 <footer class="app-footer">
     <button id="tutorialBtn" class="footer-link" type="button">玩法教程</button>
