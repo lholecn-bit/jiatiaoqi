@@ -746,6 +746,28 @@
         }
 
         /* ===== 品字布局：标题在上，棋盘左 / 三个独立卡片右，整体等高 ===== */
+        /* 上口：标题块，与下方两列同宽 */
+        .site-head {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 1160px;
+            box-sizing: border-box;
+            margin: 0 auto;
+            padding: 12px 16px 10px;
+            border-radius: 22px;
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            background: rgba(255, 255, 255, 0.035);
+            backdrop-filter: blur(6px);
+        }
+        .site-head h1 { margin: 0; }
+        .site-head #subtitle { margin: 6px 0 2px; }
+        [data-theme="light"] .site-head {
+            border-color: rgba(140, 110, 60, 0.18);
+            background: rgba(255, 255, 255, 0.5);
+        }
         .game-layout {
             display: flex;
             flex-direction: column;
@@ -833,9 +855,10 @@
 </head>
 <body>
 
-<h1>夹挑棋</h1>
-<p id="subtitle">夹挑连锁 · 方寸制胜</p>
-
+<div class="site-head">
+    <h1>夹挑棋</h1>
+    <p id="subtitle">夹挑连锁 · 方寸制胜</p>
+</div>
 <button id="themeBtn" class="theme-btn" title="切换亮/暗主题" aria-label="切换亮/暗主题">🌙</button>
 
 
