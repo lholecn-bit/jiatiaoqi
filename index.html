@@ -477,6 +477,25 @@
         .btn-plain:hover { background: rgba(255, 255, 255, 0.08); }
 
         /* ===== M2：账号面板 ===== */
+        .modal-overlay .modal { position: relative; }
+        .modal-x {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            width: 28px;
+            height: 28px;
+            border: 0;
+            border-radius: 50%;
+            background: transparent;
+            color: #8fa2c6;
+            font-size: 13px;
+            cursor: pointer;
+            line-height: 1;
+            transition: background 0.2s, color 0.2s;
+        }
+        .modal-x:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        [data-theme="light"] .modal-x { color: #8a7350; }
+        [data-theme="light"] .modal-x:hover { background: rgba(140, 110, 60, 0.12); color: #3c3426; }
         .account-pane { margin-top: 16px; }
         .account-pane hr {
             border: 0;
@@ -747,11 +766,12 @@
 
 <div id="profileOverlay" class="modal-overlay">
     <div class="modal">
+        <button id="profileCloseX" class="modal-x" type="button" aria-label="关闭">✕</button>
         <h2>我的名号</h2>
         <div id="avatarGrid" class="avatar-grid"></div>
         <input id="nickInput" maxlength="14" placeholder="给自己起个名字（可留空）" />
         <div class="modal-actions">
-            <button id="profileCancelBtn" class="btn-plain" type="button">取 消</button>
+            <button id="profileCancelBtn" class="btn-plain" type="button">关 闭</button>
             <button id="profileSaveBtn" type="button">保 存</button>
         </div>
         <div class="account-pane">
@@ -1338,6 +1358,12 @@ function acctMsg(text) {
     if (acctStateEl) acctStateEl.textContent = text;
 }
 
+// 成功提示后自动关闭名号弹窗（注册/登录/退出）
+function acctDone(text) {
+    acctMsg(text);
+    setTimeout(() => closeOverlay(profileOverlayEl), 700);
+}
+
 async function acctRegister() {
     const username = acctUserEl.value.trim();
     const password = acctPassEl.value;
@@ -1354,8 +1380,8 @@ async function acctRegister() {
         body: { guestToken: currentToken, username, password },
     });
     if (!r.ok) { acctMsg(r.data.message || '注册失败'); return; }
-    acctMsg('注册成功，资料已保存到账号');
     await syncCloudProfile();
+    acctDone('✅ 注册成功，已登录 @' + username);
 }
 
 async function acctLogin() {
@@ -1368,16 +1394,16 @@ async function acctLogin() {
     });
     if (!r.ok) { acctMsg(r.data.message || '登录失败'); return; }
     saveToken(r.data.token);
-    acctMsg('登录成功');
     await syncCloudProfile();
+    acctDone('✅ 登录成功，欢迎回来 @' + username);
 }
 
 async function acctLogout() {
     if (currentToken) await apiCall('/api/logout', { method: 'POST' });
     saveToken(null);
     accountInfo = null;
-    acctMsg('已退出登录');
     if (await ensureIdentity()) await syncCloudProfile();
+    acctDone('已退出登录，当前为游客模式');
 }
 
 // ========== M1：玩法教程 ==========
@@ -2431,6 +2457,7 @@ themeBtnEl.addEventListener('click', toggleTheme);
 profileBtnEl.addEventListener('click', openProfileModal);
 profileSaveBtnEl.addEventListener('click', saveProfile);
 profileCancelBtnEl.addEventListener('click', () => closeOverlay(profileOverlayEl));
+document.getElementById('profileCloseX').addEventListener('click', () => closeOverlay(profileOverlayEl));
 nickInputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveProfile(); });
 tutorialBtnEl.addEventListener('click', openTutorial);
 tutPrevBtnEl.addEventListener('click', () => tutorialStep(-1));
