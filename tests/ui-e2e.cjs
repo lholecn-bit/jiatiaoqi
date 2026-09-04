@@ -71,6 +71,7 @@ class CDP {
 
 // ---------- 工具 ----------
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const WS_BASE = (() => { const u = new URL(BASE); return (u.protocol === 'https:' ? 'wss' : 'ws') + '://' + u.host + '/ws'; })();
 
 async function fetchJson(url) {
     const r = await fetch(url);
@@ -331,6 +332,63 @@ async function main() {
             const tip2 = await cdp.evalJS(`document.getElementById('onlineTip').textContent`);
             assert.equal(tip2, tip, '手动断开后不应自动重连');
             assert.ok(!tip2.includes('自动重连'));
+        });
+
+        // ---------- D1 历史记录 + 对局回放（M2b） ----------
+        step('D1 在线对局自动存档可回放', async () => {
+            // 先真实录一盘：两个 ws 客户端加入房间，黑走一步后白认输
+            const mk = async () => {
+                const r = await fetch(BASE.replace('/index.html', '') + '/api/guest', { method: 'POST' });
+                return (await r.json()).token;
+            };
+            const conn = (token) => new Promise((resolve, reject) => {
+                const ws = new WebSocket(WS_BASE);
+                const inbox = [], wait = [];
+                ws.on('message', (d) => { const m = JSON.parse(d.toString()); const w = wait.shift(); if (w) w(m); else inbox.push(m); });
+                ws.once('open', () => resolve({
+                    ws, send: (o) => ws.send(JSON.stringify(o)),
+                    nextOf(type) {
+                        const take = () => { const m = inbox.shift(); if (m && m.type === type) return Promise.resolve(m); return Promise.resolve(wait.push) && nextOf.bind(this)(type); };
+                        return new Promise((res) => { const w = (m) => res(m); wait.push(w); const m = inbox.shift(); if (m) { wait.pop(); res(m.type === type ? m : undefined); } });
+                    },
+                }));
+                ws.once('error', reject);
+            });
+            const room = 'hist_' + Date.now().toString(36);
+            const tA = await mk(), tB = await mk();
+            const a = new WebSocket(WS_BASE); const b = new WebSocket(WS_BASE);
+            await new Promise((r) => { a.once('open', r); });
+            await new Promise((r) => { b.once('open', r); });
+            let aJoined = false, bJoined = false, bGotMove = false, aGotSur = false;
+            a.on('message', (d) => { const m = JSON.parse(d.toString()); if (m.type === 'joined') aJoined = true; if (m.type === 'surrender') aGotSur = true; });
+            b.on('message', (d) => { const m = JSON.parse(d.toString()); if (m.type === 'joined') bJoined = true; if (m.type === 'move') bGotMove = true; });
+            a.send(JSON.stringify({ type: 'join', roomId: room, token: tA }));
+            await (async () => { while (!aJoined) await sleep(50); })();
+            b.send(JSON.stringify({ type: 'join', roomId: room, token: tB }));
+            await (async () => { while (!bJoined) await sleep(50); })();
+            a.send(JSON.stringify({ type: 'move', roomId: room, move: { fx: 0, fy: 0, tx: 0, ty: 2 } }));
+            await (async () => { while (!bGotMove) await sleep(50); })();
+            b.send(JSON.stringify({ type: 'surrender', roomId: room, winnerPiece: 1 }));
+            await (async () => { while (!aGotSur) await sleep(50); })();
+            await sleep(200);
+            a.close(); b.close();
+
+            // 页面：打开历史 → 出现该局 → 点开回放 → 步进/自动播放/退出
+            await load(freshUrl('d1'));
+            await clickById(cdp, 'historyBtn');
+            await waitFor(cdp, `document.querySelectorAll('.history-row').length>0`, 8000, '历史列表非空');
+            const rows = await cdp.evalJS(`document.querySelectorAll('.history-row').length`);
+            assert.ok(rows >= 1, '应有已存档对局');
+            await cdp.evalJS(`document.querySelector('.history-row').click()`);
+            await waitFor(cdp, `document.getElementById('replayBar').style.display!=='none'`, 8000, '回放控制条出现');
+            assert.ok((await cdp.evalJS(`document.getElementById('rpInfo').textContent`)).includes('/'), '显示步数进度');
+            const info1 = await cdp.evalJS(`document.getElementById('rpInfo').textContent`);
+            await clickById(cdp, 'rpNext');
+            const info2 = await cdp.evalJS(`document.getElementById('rpInfo').textContent`);
+            assert.notEqual(info2, info1, '下一步更新进度');
+            await clickById(cdp, 'rpClose');
+            await waitFor(cdp, `document.getElementById('replayBar').style.display==='none'`, 5000, '退出回放');
+            assert.ok((await cdp.evalJS(`document.getElementById('status').textContent`)).includes('走棋'), '恢复普通对局界面');
         });
 
         // ---------- 汇总 ----------

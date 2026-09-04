@@ -855,6 +855,80 @@
             background: rgba(255, 255, 255, 0.6);
         }
 
+        .footer-sep { color: #6b7693; }
+        [data-theme="light"] .footer-sep { color: #a2947a; }
+
+        /* ===== M2b：历史列表 ===== */
+        .history-modal { width: min(520px, 94vw); }
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+            max-height: 46vh;
+            overflow-y: auto;
+        }
+        .history-row {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+            text-align: left;
+        }
+        .history-row:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(240, 199, 110, 0.5); }
+        .history-row .hr-main { min-width: 0; }
+        .history-row .hr-title { font-size: 14px; color: #eef1f8; }
+        .history-row .hr-sub { font-size: 12px; color: #93a0b8; margin-top: 2px; }
+        .history-row .hr-moves { font-size: 12px; color: #8fa2c6; }
+        .history-row .hr-result {
+            font-size: 12.5px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 999px;
+        }
+        .hr-result.win-black { background: rgba(20, 20, 26, 0.75); color: #fff; border: 1px solid #666; }
+        .hr-result.win-white { background: rgba(240, 240, 245, 0.9); color: #222; }
+        .hr-result.abandoned { background: rgba(255, 255, 255, 0.08); color: #9aa3b5; }
+        [data-theme="light"] .history-row {
+            border-color: rgba(140, 110, 60, 0.2);
+            background: rgba(255, 255, 255, 0.55);
+        }
+        [data-theme="light"] .history-row:hover { background: #fff; }
+        [data-theme="light"] .history-row .hr-title { color: #3c3426; }
+
+        /* ===== M2b：回放控制条 ===== */
+        .replay-bar {
+            position: fixed;
+            left: 50%;
+            bottom: 18px;
+            transform: translateX(-50%);
+            z-index: 120;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(240, 199, 110, 0.35);
+            background: rgba(16, 21, 36, 0.92);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.6);
+            max-width: 94vw;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .replay-info { font-size: 13px; color: #f0d060; white-space: nowrap; }
+        [data-theme="light"] .replay-bar {
+            background: rgba(255, 249, 234, 0.95);
+            border-color: rgba(176, 124, 31, 0.5);
+        }
+        [data-theme="light"] .replay-info { color: #a87216; }
+
         @media (prefers-reduced-motion: reduce) {
             #status::before { animation: none; }
             * { transition: none !important; animation: none !important; }
@@ -921,8 +995,21 @@
 
 <footer class="app-footer">
     <button id="tutorialBtn" class="footer-link" type="button">玩法教程</button>
+    <span class="footer-sep">·</span>
+    <button id="historyBtn" class="footer-link" type="button">对局回放</button>
     <span id="appVersion" class="app-version"></span>
 </footer>
+
+<div id="replayBar" class="replay-bar" style="display:none">
+    <button id="rpFirst" class="btn-plain" type="button" title="首步">⏮</button>
+    <button id="rpPrev" class="btn-plain" type="button" title="上一步">◀</button>
+    <button id="rpToggle" class="btn-plain" type="button" title="播放/暂停">▶</button>
+    <button id="rpNext" class="btn-plain" type="button" title="下一步">▶</button>
+    <button id="rpLast" class="btn-plain" type="button" title="末步">⏭</button>
+    <button id="rpSpeed" class="btn-plain" type="button">1x</button>
+    <span id="rpInfo" class="replay-info"></span>
+    <button id="rpClose" class="btn-plain" type="button">退出回放 ✕</button>
+</div>
 
 <div id="overlay">
     <div class="modal">
@@ -958,6 +1045,19 @@
                 <button id="acctLoginBtn" class="btn-plain" type="button">登 录</button>
                 <button id="acctLogoutBtn" class="btn-plain" type="button" style="display:none">退出登录</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<div id="historyOverlay" class="modal-overlay">
+    <div class="modal history-modal">
+        <button id="historyCloseX" class="modal-x" type="button" aria-label="关闭">✕</button>
+        <h2>对局回放</h2>
+        <div class="account-state" style="min-height:0">对局为在线模式自动存档（本地对局不记录）。点击某一行开始回放。</div>
+        <div id="historyList" class="history-list"></div>
+        <div class="modal-actions">
+            <button id="historyRefreshBtn" class="btn-plain" type="button">刷 新</button>
+            <button id="historyCloseBtn" class="btn-plain" type="button">关 闭</button>
         </div>
     </div>
 </div>
@@ -1096,6 +1196,22 @@ const tabAccountEl = document.getElementById('tabAccount');
 const panelAppearanceEl = document.getElementById('panelAppearance');
 const panelAccountEl = document.getElementById('panelAccount');
 const guestHintEl = document.getElementById('guestHint');
+
+// M2b：历史回放
+const historyBtnEl = document.getElementById('historyBtn');
+const historyOverlayEl = document.getElementById('historyOverlay');
+const historyListEl = document.getElementById('historyList');
+const historyRefreshBtnEl = document.getElementById('historyRefreshBtn');
+const historyCloseBtnEl = document.getElementById('historyCloseBtn');
+const replayBarEl = document.getElementById('replayBar');
+const rpInfoEl = document.getElementById('rpInfo');
+const rpFirstEl = document.getElementById('rpFirst');
+const rpPrevEl = document.getElementById('rpPrev');
+const rpToggleEl = document.getElementById('rpToggle');
+const rpNextEl = document.getElementById('rpNext');
+const rpLastEl = document.getElementById('rpLast');
+const rpSpeedEl = document.getElementById('rpSpeed');
+const rpCloseEl = document.getElementById('rpClose');
 
 // M2：账号 / 云端身份
 const TOKEN_KEY = 'jtq-token';
@@ -1246,7 +1362,7 @@ function maybeScheduleAi() {
 }
 
 async function applyRemoteMove(move) {
-    if (gameOver) return;
+    if (replayMode || gameOver) return;
     isAnimating = true;
     aiThinking = false;
     selPiece = null;
@@ -1826,6 +1942,186 @@ async function acctLogout() {
     acctDone('已退出登录，游客模式（名号每次随机）');
 }
 
+// ========== M2b：历史记录与对局回放 ==========
+let replayMode = false;
+let replayFrames = [];
+let replayMeta = null;
+let replayIdx = 0;
+let replayTimer = null;
+let replaySpeed = 1;
+let envSave = null;   // 进入回放前保存的对局环境
+
+const REASON_TEXT = {
+    pieces: '吃光获胜',
+    nomove: '对方无子可动',
+    surrender: '认输',
+    leave: '对方离开',
+    restart: '重开',
+    idle: '超时关闭',
+};
+
+function playerLabel(p) {
+    return (p && p.nick) ? p.nick : '游客';
+}
+function resultBadge(g) {
+    if (g.result === 'black') return { text: '黑胜', cls: 'win-black' };
+    if (g.result === 'white') return { text: '白胜', cls: 'win-white' };
+    return { text: '未分胜负', cls: 'abandoned' };
+}
+
+async function openHistory() {
+    if (replayMode) return;
+    if (gameMode === 'online' && onlineConnected) {
+        setOnlineTip('在线对局中暂不能打开回放，请先断开');
+        return;
+    }
+    await loadHistory();
+    openOverlay(historyOverlayEl);
+}
+
+async function loadHistory() {
+    historyListEl.innerHTML = '<div class="account-state">加载中…</div>';
+    await ensureIdentity();
+    const r = await apiCall('/api/games?limit=50');
+    if (!r.ok) {
+        historyListEl.innerHTML = '<div class="account-state">获取历史失败（' + ((r.data && r.data.message) || '网络错误') + '）</div>';
+        return;
+    }
+    const games = (r.data && r.data.games) || [];
+    if (games.length === 0) {
+        historyListEl.innerHTML = '<div class="account-state">暂无对局记录（在线对战会自动存档）</div>';
+        return;
+    }
+    historyListEl.innerHTML = '';
+    games.forEach((g) => {
+        const row = document.createElement('div');
+        row.className = 'history-row';
+        const b = resultBadge(g);
+        const black = playerLabel({ nick: g.black_nick });
+        const white = playerLabel({ nick: g.white_nick });
+        const time = (g.started_at || '').replace('T', ' ').slice(0, 16);
+        row.innerHTML =
+            '<div class="hr-main"><div class="hr-title">黑 ' + black + ' vs 白 ' + white + '</div>' +
+            '<div class="hr-sub">房间 ' + g.room + ' · ' + time + ' · ' + (REASON_TEXT[g.reason] || g.reason || '') + '</div></div>' +
+            '<div class="hr-moves">' + (g.move_count || 0) + ' 手</div>' +
+            '<div class="hr-result ' + b.cls + '">' + b.text + '</div>';
+        row.addEventListener('click', () => openReplay(g.id));
+        historyListEl.appendChild(row);
+    });
+}
+
+async function openReplay(gameId) {
+    const r = await apiCall('/api/games/' + gameId);
+    if (!r.ok) { historyListEl.innerHTML = '<div class="account-state">读取对局失败</div>'; return; }
+    const game = r.data.game || {};
+    const moves = (r.data.moves || []).sort((a, b) => a.seq - b.seq);
+    replayFrames = buildReplayFrames(moves);
+    replayMeta = { game, moves };
+    replayIdx = 0;
+    replaySpeed = 1;
+    // 保存当前对局环境，退出回放时恢复
+    envSave = {
+        board: board.map((c) => c.slice()),
+        curPlayer, lastMove, gameOver,
+        selPiece, validMoves: validMoves.slice(),
+    };
+    closeOverlay(historyOverlayEl);
+    replayMode = true;
+    replayBarEl.style.display = 'flex';
+    rpSpeedEl.textContent = '1x';
+    rpToggleEl.textContent = '▶';
+    showReplay(0);
+}
+
+function buildReplayFrames(moves) {
+    const frames = [];
+    const b0 = Array.from({ length: GRID }, () => Array(GRID).fill(EMPTY));
+    for (let x = 0; x < GRID; x++) b0[x][0] = BLACK;
+    for (let x = 0; x < GRID; x++) b0[x][4] = WHITE;
+    frames.push({ b: b0.map((c) => c.slice()), cur: BLACK });
+    let cur = BLACK;
+    for (const mv of moves) {
+        const b = frames[frames.length - 1].b.map((c) => c.slice());
+        b[mv.fx][mv.fy] = EMPTY;
+        b[mv.tx][mv.ty] = mv.color;
+        let queue = [[mv.tx, mv.ty]];
+        while (queue.length > 0) {
+            const next = [], seen = new Set();
+            for (const [qx, qy] of queue) {
+                for (const [cx, cy] of findCapturesOnBoard(b, qx, qy, mv.color)) {
+                    const k = cx * GRID + cy;
+                    if (b[cx][cy] !== mv.color && !seen.has(k)) {
+                        seen.add(k);
+                        b[cx][cy] = mv.color;
+                        next.push([cx, cy]);
+                    }
+                }
+            }
+            queue = next;
+        }
+        cur = cur === BLACK ? WHITE : BLACK;
+        frames.push({ b: b.map((c) => c.slice()), cur, move: mv });
+    }
+    return frames;
+}
+
+function showReplay(i) {
+    replayIdx = Math.max(0, Math.min(i, replayFrames.length - 1));
+    const f = replayFrames[replayIdx];
+    board = f.b.map((c) => c.slice());
+    curPlayer = f.cur;
+    gameOver = false;
+    selPiece = null;
+    validMoves = [];
+    lastMove = f.move ? { fx: f.move.fx, fy: f.move.fy, tx: f.move.tx, ty: f.move.ty } : null;
+    updatePieceCounts();
+    const colorName = curPlayer === BLACK ? '黑方' : '白方';
+    statusEl.textContent = '回放中：第 ' + replayIdx + '/' + (replayFrames.length - 1) + ' 步';
+    blackSideEl.classList.toggle('active', curPlayer === BLACK);
+    whiteSideEl.classList.toggle('active', curPlayer === WHITE);
+    const g = replayMeta.game;
+    rpInfoEl.textContent = (g.result ? (g.result === 'black' ? '黑胜' : g.result === 'white' ? '白胜' : '平/中断') + ' · ' : '') +
+        (REASON_TEXT[g.reason] || '') + ' · ' + replayIdx + '/' + (replayFrames.length - 1);
+    draw();
+}
+
+function replayStep(delta) {
+    stopReplayTimer();
+    showReplay(replayIdx + delta);
+    if (replayIdx < replayFrames.length - 1) rpToggleEl.textContent = '▶';
+}
+
+function startReplayTimer() {
+    stopReplayTimer();
+    if (replayIdx >= replayFrames.length - 1) { rpToggleEl.textContent = '▶'; return; }
+    rpToggleEl.textContent = '⏸';
+    replayTimer = setInterval(() => {
+        if (replayIdx >= replayFrames.length - 1) { stopReplayTimer(); rpToggleEl.textContent = '▶'; return; }
+        showReplay(replayIdx + 1);
+    }, 950 / replaySpeed);
+}
+function stopReplayTimer() {
+    if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+}
+
+function closeReplay() {
+    stopReplayTimer();
+    replayMode = false;
+    replayBarEl.style.display = 'none';
+    if (envSave) {
+        board = envSave.board.map((c) => c.slice());
+        curPlayer = envSave.curPlayer;
+        lastMove = envSave.lastMove;
+        gameOver = envSave.gameOver;
+        selPiece = envSave.selPiece;
+        validMoves = envSave.validMoves.slice();
+    }
+    envSave = null;
+    updatePieceCounts();
+    updateUI();
+    draw();
+}
+
 // ========== M1：玩法教程 ==========
 const TUT_SLIDES = [
     {
@@ -1922,6 +2218,7 @@ function syncUndoBtn() {
 }
 
 function undoLastMove() {
+    if (replayMode) return;
     if (gameMode === 'online') {
         if (!pendingMyUndo) {
             setOnlineTip('在线只能撤回自己刚走的最后一步（需在对方行棋前）');
@@ -2740,7 +3037,7 @@ function draw() {
 // ========== Event Handlers ==========
 
 canvas.addEventListener('click', async (e) => {
-    if (gameOver || isAnimating || !isHumanTurn()) return;
+    if (replayMode || gameOver || isAnimating || !isHumanTurn()) return;
     const rect = canvas.getBoundingClientRect();
     const sx = (e.clientX - rect.left) * (CANVAS_CSS / rect.width);
     const sy = (e.clientY - rect.top) * (CANVAS_CSS / rect.height);
@@ -2811,6 +3108,7 @@ canvas.addEventListener('mouseleave', () => {
 });
 
 document.getElementById('restartBtn').addEventListener('click', () => {
+    if (replayMode) return;
     if (gameMode === 'online' && onlineConnected) {
         sendOnlineMessage({ type: 'restart', roomId: onlineRoomId });
     }
@@ -2819,7 +3117,7 @@ document.getElementById('restartBtn').addEventListener('click', () => {
 });
 
 document.getElementById('surrenderBtn').addEventListener('click', () => {
-    if (gameOver || isAnimating) return;
+    if (replayMode || gameOver || isAnimating) return;
     const winnerPiece = curPlayer === BLACK ? WHITE : BLACK;
     const winner = curPlayer === BLACK ? '白方' : '黑方';
     if (gameMode === 'online' && onlineConnected) {
@@ -2835,6 +3133,7 @@ document.getElementById('surrenderBtn').addEventListener('click', () => {
 });
 
 document.getElementById('playAgainBtn').addEventListener('click', () => {
+    if (replayMode) return;
     if (gameMode === 'online' && onlineConnected) {
         sendOnlineMessage({ type: 'restart', roomId: onlineRoomId });
     }
@@ -2843,6 +3142,7 @@ document.getElementById('playAgainBtn').addEventListener('click', () => {
 });
 
 pvpModeBtn.addEventListener('click', () => {
+    if (replayMode) return;
     if (gameMode === 'pvp') return;
     if (gameMode === 'online') {
         userDisconnect();
@@ -2854,6 +3154,7 @@ pvpModeBtn.addEventListener('click', () => {
 });
 
 aiModeBtn.addEventListener('click', () => {
+    if (replayMode) return;
     if (gameMode === 'ai') return;
     if (gameMode === 'online') {
         userDisconnect();
@@ -2866,6 +3167,7 @@ aiModeBtn.addEventListener('click', () => {
 });
 
 onlineModeBtn.addEventListener('click', () => {
+    if (replayMode) return;
     if (gameMode === 'online') return;
     gameMode = 'online';
     updateModeUI();
@@ -2908,6 +3210,28 @@ acctLogoutBtnEl.addEventListener('click', acctLogout);
 acctPassEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') acctLogin(); });
 tabAppearanceEl.addEventListener('click', () => switchProfileTab('appearance'));
 tabAccountEl.addEventListener('click', () => switchProfileTab('account'));
+
+// ========== M2b 事件 ==========
+historyBtnEl.addEventListener('click', openHistory);
+historyCloseBtnEl.addEventListener('click', () => closeOverlay(historyOverlayEl));
+historyCloseX = document.getElementById('historyCloseX');
+if (historyCloseX) historyCloseX.addEventListener('click', () => closeOverlay(historyOverlayEl));
+historyRefreshBtnEl.addEventListener('click', loadHistory);
+rpFirstEl.addEventListener('click', () => { stopReplayTimer(); rpToggleEl.textContent = '▶'; showReplay(0); });
+rpPrevEl.addEventListener('click', () => replayStep(-1));
+rpNextEl.addEventListener('click', () => replayStep(1));
+rpLastEl.addEventListener('click', () => { stopReplayTimer(); rpToggleEl.textContent = '▶'; showReplay(replayFrames.length - 1); });
+rpToggleEl.addEventListener('click', () => {
+    if (replayIdx >= replayFrames.length - 1) { showReplay(0); }
+    if (replayTimer) { stopReplayTimer(); rpToggleEl.textContent = '▶'; }
+    else startReplayTimer();
+});
+rpSpeedEl.addEventListener('click', () => {
+    replaySpeed = replaySpeed === 1 ? 2 : 1;
+    rpSpeedEl.textContent = replaySpeed + 'x';
+    if (replayTimer) startReplayTimer();
+});
+rpCloseEl.addEventListener('click', closeReplay);
 
 // ========== Init ==========
 const appVersionEl = document.getElementById('appVersion');

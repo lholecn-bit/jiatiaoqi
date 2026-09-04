@@ -88,6 +88,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
     }
     async function handleApi(req, res, pathname) {
         try {
+            const q = new URL(req.url || '/', 'http://x');
             if (req.method === 'POST' && (pathname === '/api/guest')) {
                 const r = store.guestToken();
                 return json(res, 200, { token: r.token, player: r.player });
@@ -129,7 +130,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 return json(res, 200, { player });
             }
             if (req.method === 'GET' && pathname === '/api/games') {
-                const limit = Math.min(Number(u.searchParams.get('limit')) || 50, 200);
+                const limit = Math.min(Number(q.searchParams.get('limit')) || 50, 200);
                 return json(res, 200, { games: store.listGames(limit) });
             }
             const m = pathname.match(/^\/api\/games\/(\d+)$/);
