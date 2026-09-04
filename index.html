@@ -1181,6 +1181,7 @@ let pingTimer = null;
 const RECONNECT_MAX_ATTEMPTS = 10;
 const PING_INTERVAL = 10000;    // 客户端每 10s 发一次应用层 ping
 const PONG_TIMEOUT = 20000;     // 20s 未收到 pong 判定连接已死
+let pendingMyUndo = false;   // 在线：我刚走了最后一步且对方尚未行棋（此时可悔）
 let undoStack = [];          // 悔棋快照栈：{ b, p, last, mover }
 let profile = { avatar: 0, name: '', v: AVATAR_SCHEMA };
 let tutIndex = 0;
@@ -1227,6 +1228,8 @@ function closeOnlineSocket() {
     onlineRoomId = '';
     onlinePlayerColor = null;
     onlinePlayersCount = 0;
+    pendingMyUndo = false;
+    syncUndoBtn();
 }
 
 function normalizeWsUrl(raw) {
@@ -1263,6 +1266,7 @@ function handleOnlineMessage(payload) {
         // 连接成功（首次或重连）：复位重试状态
         reconnectAttempts = 0;
         if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        pendingMyUndo = false;
         onlinePlayerColor = payload.color;
         onlineRoomId = payload.roomId;
         onlinePlayersCount = payload.players || 1;
@@ -1295,17 +1299,43 @@ function handleOnlineMessage(payload) {
     }
 
     if (payload.type === 'move') {
+        pendingMyUndo = false;   // 对方已行棋：不能再撤回自己上一步
+        syncUndoBtn();
         applyRemoteMove(payload.move);
         return;
     }
 
+    if (payload.type === 'undo') {
+        // 服务端权威：某方撤回自己刚走的一步
+        pendingMyUndo = false;
+        if (payload.board) {
+            board = payload.board;
+            curPlayer = payload.currentPlayer;
+            selPiece = null;
+            validMoves = [];
+            lastMove = null;
+            gameOver = false;
+            isAnimating = false;
+            animCapture = null;
+            overlayEl.classList.remove('show');
+            updatePieceCounts();
+            updateUI();
+            draw();
+        }
+        const who = payload.color === BLACK ? '黑方' : '白方';
+        setOnlineTip(`房间 ${onlineRoomId}：${who} 撤回了一步`);
+        return;
+    }
+
     if (payload.type === 'restart') {
+        pendingMyUndo = false;
         resetBoard();
         setOnlineTip(`房间 ${onlineRoomId}：对局已重开`);
         return;
     }
 
     if (payload.type === 'surrender') {
+        pendingMyUndo = false;
         const winnerPiece = payload.winnerPiece;
         endGame(payload.message || '对方认输，你获胜！', winnerPiece);
         draw();
@@ -1880,14 +1910,28 @@ function restoreSnapshot(s) {
 }
 
 function syncUndoBtn() {
-    if (undoBtnEl) {
-        undoBtnEl.disabled = gameMode === 'online' || undoStack.length === 0 || gameOver || isAnimating;
+    if (!undoBtnEl) return;
+    if (gameMode === 'online') {
+        // 在线：仅当“我刚走了最后一步且对方尚未行棋”时可悔
+        const ok = onlineConnected && pendingMyUndo && !gameOver && !isAnimating
+            && onlineSocket && onlineSocket.readyState === WebSocket.OPEN;
+        undoBtnEl.disabled = !ok;
+        return;
     }
+    undoBtnEl.disabled = undoStack.length === 0 || gameOver || isAnimating;
 }
 
 function undoLastMove() {
     if (gameMode === 'online') {
-        setOnlineTip('在线对战暂不支持悔棋');
+        if (!pendingMyUndo) {
+            setOnlineTip('在线只能撤回自己刚走的最后一步（需在对方行棋前）');
+            return;
+        }
+        if (!onlineConnected || !onlineSocket) return;
+        pendingMyUndo = false;
+        syncUndoBtn();
+        setOnlineTip('正在撤回...');
+        sendOnlineMessage({ type: 'undo', roomId: onlineRoomId });
         return;
     }
     if (isAnimating || gameOver) return;
@@ -2720,6 +2764,8 @@ canvas.addEventListener('click', async (e) => {
                     roomId: onlineRoomId,
                     move: { fx: fromX, fy: fromY, tx: gx, ty: gy }
                 });
+                pendingMyUndo = true;   // 等待对方行棋前可悔
+                syncUndoBtn();
             } else {
                 await triggerAiMoveIfNeeded();
             }

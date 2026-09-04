@@ -137,6 +137,14 @@ function openDb(filePath) {
             ).run(gameId, seq, color, fx, fy, tx, ty);
             db.prepare('UPDATE games SET move_count = move_count + 1 WHERE id = ?').run(gameId);
         },
+        // 在线悔棋：删除最后一步（与房间内存中的撤销一致）
+        deleteLastMove(gameId) {
+            const row = db.prepare('SELECT seq FROM moves WHERE game_id = ? ORDER BY seq DESC LIMIT 1').get(gameId);
+            if (!row) return false;
+            db.prepare('DELETE FROM moves WHERE game_id = ? AND seq = ?').run(gameId, row.seq);
+            db.prepare('UPDATE games SET move_count = CASE WHEN move_count > 0 THEN move_count - 1 ELSE 0 END WHERE id = ?').run(gameId);
+            return true;
+        },
         finishGame(gameId, { result, reason }) {
             db.prepare(
                 `UPDATE games SET result=?, reason=?, ended_at=datetime('now') WHERE id=?`

@@ -212,6 +212,8 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
         const legals = logic.getValidMoves(board, fx, fy);
         if (!legals.some(([x, y]) => x === tx && y === ty)) return { ok: false, message: '移动路径非法' };
 
+        const before = board.map((col) => col.slice());
+        const curBefore = room.currentPlayer;
         board[fx][fy] = EMPTY;
         board[tx][ty] = player;
 
@@ -233,6 +235,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
         if (room.gameId != null && !room.finalized) {
             room.moveSeq += 1;
             store.appendMove(room.gameId, { seq: room.moveSeq, color: player, fx, fy, tx, ty });
+            room.moveLog.push({ color: player, before, curBefore, move: { fx, fy, tx, ty } });
         }
 
         const c = logic.countPieces(board);
@@ -273,7 +276,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 if (!player) return send(ws, { type: 'error', message: '身份无效，请刷新页面重试' });
                 let room = rooms.get(roomId);
                 if (!room) {
-                    room = { roomId, clients: new Set(), board: logic.initialBoard(), currentPlayer: BLACK, gameOver: false, gameId: null, moveSeq: 0, finalized: false, expireTimer: null, lastActive: Date.now() };
+                    room = { roomId, clients: new Set(), board: logic.initialBoard(), currentPlayer: BLACK, gameOver: false, gameId: null, moveSeq: 0, finalized: false, expireTimer: null, lastActive: Date.now(), moveLog: [] };
                     rooms.set(roomId, room);
                 }
                 if (room.clients.size >= 2) return send(ws, { type: 'error', message: '房间已满' });
@@ -305,6 +308,28 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 wsLog.log('move', { id: ws._logId, room: room.roomId, color: ws.meta.color, move: p.move });
                 broadcastExcept(room, ws, { type: 'move', roomId: room.roomId, move: p.move, currentPlayer: room.currentPlayer, gameOver: room.gameOver });
             }
+            if (p.type === 'undo') {
+                if (room.gameOver) return send(ws, { type: 'error', message: '对局已结束，无法悔棋' });
+                if (room.finalized) return send(ws, { type: 'error', message: '当前不可悔棋' });
+                const my = ws.meta.color;
+                const last = room.moveLog[room.moveLog.length - 1];
+                if (!last || last.color !== my) {
+                    return send(ws, { type: 'error', message: '只能撤回自己刚走的最后一步' });
+                }
+                if (room.currentPlayer === my) {
+                    return send(ws, { type: 'error', message: '对方已行棋，不能再撤回自己的上一步' });
+                }
+                // 服务端权威撤销：回到该步之前的状态
+                room.board = last.before.map((col) => col.slice());
+                room.currentPlayer = last.curBefore;
+                room.moveLog.pop();
+                if (room.gameId != null) store.deleteLastMove(room.gameId);
+                room.lastActive = Date.now();
+                broadcast(room, {
+                    type: 'undo', color: my, board: room.board, currentPlayer: room.currentPlayer,
+                });
+                return;
+            }
             if (p.type === 'restart') {
                 finalizeRoomGame(room, 'abandoned', 'restart');
                 room.board = logic.initialBoard();
@@ -313,6 +338,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 room.gameId = null;
                 room.moveSeq = 0;
                 room.finalized = false;
+                room.moveLog = [];
                 ensureGame(room);
                 room.lastActive = Date.now();
                 broadcastExcept(room, ws, { type: 'restart', roomId: room.roomId, board: room.board, currentPlayer: room.currentPlayer });
