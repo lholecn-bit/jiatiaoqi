@@ -16,6 +16,8 @@ const app = createApp({
     heartbeatMs: process.env.HEARTBEAT_INTERVAL ? Number(process.env.HEARTBEAT_INTERVAL) : 30000,
     roomKeepMs: process.env.ROOM_KEEP_MS ? Number(process.env.ROOM_KEEP_MS) : 300000,
     roomIdleMs: process.env.ROOM_IDLE_MS ? Number(process.env.ROOM_IDLE_MS) : 1800000,
+    spectatorDelayMs: process.env.SPECTATOR_DELAY_MS ? Number(process.env.SPECTATOR_DELAY_MS) : 3000,
+    adminUsernames: (process.env.ADMIN_USERNAMES || '').split(',').map((x) => x.trim()).filter(Boolean),
 });
 
 app.server.listen(PORT, () => {

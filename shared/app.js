@@ -68,7 +68,7 @@ function readBody(req) {
     });
 }
 
-function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000, roomIdleMs = 1800000, sweepMs = 30000, loginMaxFails = 8, loginLockMs = 900000, pruneMs = 21600000 }) {
+function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000, roomIdleMs = 1800000, sweepMs = 30000, loginMaxFails = 8, loginLockMs = 900000, pruneMs = 21600000, adminUsernames = [], spectatorDelayMs = 3000 }) {
     if (!store) throw new Error('store 必填');
     logic.buildLines(); // 初始化棋盘拓扑索引（幂等）
     const rooms = new Map();
@@ -177,7 +177,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
             if (!me) return json(res, 401, { message: '请先创建或登录身份' });
 
             if (req.method === 'GET' && pathname === '/api/me') {
-                return json(res, 200, { player: me });
+                return json(res, 200, { player: { ...me, admin: isAdmin(me) } });
             }
             if (req.method === 'PATCH' && pathname === '/api/profile') {
                 if (me.kind !== 'account') {
@@ -201,6 +201,17 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 }
                 return json(res, 200, { game, moves: store.getMoves(game.id) });
             }
+            if (req.method === 'GET' && pathname === '/api/rooms') {
+                return json(res, 200, { rooms: roomsListForApi(false) });
+            }
+            if (req.method === 'GET' && pathname === '/api/leaderboard') {
+                const limit = Math.min(Number(q.searchParams.get('limit')) || 20, 100);
+                return json(res, 200, { leaderboard: store.leaderboard(limit) });
+            }
+            if (req.method === 'GET' && pathname === '/api/admin/rooms') {
+                if (!isAdmin(me)) return json(res, 403, { message: '需要管理员权限' });
+                return json(res, 200, { rooms: roomsListForApi(true) });
+            }
             return json(res, 404, { message: '接口不存在' });
         } catch (err) {
             json(res, 400, { message: err.message || '请求错误' });
@@ -215,6 +226,49 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
     }
     function broadcast(room, payload) { for (const c of room.clients) send(c, payload); }
     function broadcastExcept(room, ex, payload) { for (const c of room.clients) if (c !== ex) send(c, payload); }
+    function seatClients(room) { return [...room.clients].filter((c) => c.meta && c.meta.color != null); }
+    function spectatorClients(room) { return [...room.clients].filter((c) => c.meta && c.meta.spectator); }
+    function isAdmin(player) {
+        return !!(player && (player.is_admin === 1 || adminUsernames.includes(String(player.username || ''))));
+    }
+    function roomNameFor(playerId) {
+        const p = playerId ? store.getPlayer(playerId) : null;
+        if (!p) return '游客';
+        return p.nick || p.username || '游客';
+    }
+    function roomsListForApi(adminView) {
+        const out = [];
+        for (const room of rooms.values()) {
+            const seats = seatClients(room);
+            const specs = spectatorClients(room);
+            if (seats.length === 0) continue; // 空置房间不展示（保留期内的由加入者按房号直连）
+            const playing = !!(room.gameId != null && !room.gameOver && seats.length === 2);
+            out.push({
+                roomId: room.roomId,
+                state: playing ? 'playing' : 'waiting',
+                players: seats.map((c) => ({ color: c.meta.color, name: roomNameFor(c.meta.playerId) })),
+                seats: seats.length,
+                spectators: specs.length,
+                moves: room.moveSeq,
+                updatedAt: room.lastActive,
+                ...(adminView ? { playerIds: seats.map((c) => c.meta.playerId) } : {}),
+            });
+        }
+        return out;
+    }
+    // 对局事件广播：玩家座位即时，观战者按 spectatorDelayMs 延迟（防通风报信）
+    function broadcastGameEvent(room, ex, payload) {
+        seatClients(room).forEach((c) => { if (c !== ex) send(c, payload); });
+        const specs = spectatorClients(room);
+        if (specs.length === 0) return;
+        const deliver = () => {
+            if (rooms.get(room.roomId) !== room) return;
+            specs.forEach((c) => send(c, payload));
+        };
+        if (!spectatorDelayMs) { deliver(); return; }
+        const t = setTimeout(deliver, spectatorDelayMs);
+        if (typeof t.unref === 'function') t.unref();
+    }
 
     // 直接清理房间（通知类清理场景用：取消保留期定时器、补终局记录、删除）
     function cleanupRoom(room, reason) {
@@ -247,7 +301,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
     }
     function ensureGame(room) {
         if (room.gameId != null) return;
-        if (room.clients.size < 2) return;
+        if (seatClients(room).length < 2) return;
         let black = null, white = null;
         for (const c of room.clients) {
             if (!c.meta || !c.meta.playerId) continue;
@@ -335,6 +389,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 const roomId = String(p.roomId || '').trim();
                 const token = String(p.token || '');
                 const player = token ? store.playerByToken(token) : null;
+                const spectate = p.spectate === true || p.type === 'watch';
                 if (!roomId) return send(ws, { type: 'error', message: '房间号不能为空' });
                 if (!player) return send(ws, { type: 'error', message: '身份无效，请刷新页面重试' });
                 let room = rooms.get(roomId);
@@ -342,25 +397,39 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                     room = { roomId, clients: new Set(), board: logic.initialBoard(), currentPlayer: BLACK, gameOver: false, gameId: null, moveSeq: 0, finalized: false, expireTimer: null, lastActive: Date.now(), moveLog: [] };
                     rooms.set(roomId, room);
                 }
-                if (room.clients.size >= 2) return send(ws, { type: 'error', message: '房间已满' });
-                const color = chooseColor(room);
-                if (color == null) return send(ws, { type: 'error', message: '无法分配颜色' });
+                let color = null;
+                if (!spectate) {
+                    if (seatClients(room).length >= 2) return send(ws, { type: 'error', message: '房间已满，可切换到观战' });
+                    color = chooseColor(room);
+                    if (color == null) return send(ws, { type: 'error', message: '无法分配颜色' });
+                }
                 cancelRoomExpiry(room);
                 room.lastActive = Date.now();
                 room.clients.add(ws);
-                ws.meta = { roomId, color, playerId: player.id };
-                wsLog.log('join', { id: ws._logId, room: roomId, color, player: player.id, players: room.clients.size });
+                ws.meta = spectate
+                    ? { roomId, color: null, playerId: player.id, spectator: true }
+                    : { roomId, color, playerId: player.id };
+                wsLog.log(spectate ? 'spectate' : 'join', {
+                    id: ws._logId, room: roomId, color, player: player.id,
+                    seats: seatClients(room).length, spectators: spectatorClients(room).length,
+                });
+                const players = seatClients(room).length;
+                const spectators = spectatorClients(room).length;
                 send(ws, {
-                    type: 'joined', roomId, color, players: room.clients.size,
+                    type: 'joined', roomId, color, players, spectators,
+                    spectator: !!spectate,
                     board: room.board, currentPlayer: room.currentPlayer, nick: player.nick, avatar: player.avatar,
                 });
-                broadcast(room, { type: 'room-update', roomId, players: room.clients.size });
-                ensureGame(room);
+                broadcast(room, { type: 'room-update', roomId, players, spectators });
+                if (!spectate) ensureGame(room);
                 return;
             }
             if (!ws.meta || !ws.meta.roomId) return;
             const room = rooms.get(ws.meta.roomId);
             if (!room) return;
+            if (ws.meta.spectator) {
+                return send(ws, { type: 'error', message: '观战者不能操作' });
+            }
 
             if (p.type === 'move') {
                 if (room.gameOver) return send(ws, { type: 'error', message: '对局已结束' });
@@ -369,7 +438,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 if (!r.ok) return send(ws, { type: 'error', message: r.message });
                 room.lastActive = Date.now();
                 wsLog.log('move', { id: ws._logId, room: room.roomId, color: ws.meta.color, move: p.move });
-                broadcastExcept(room, ws, { type: 'move', roomId: room.roomId, move: p.move, currentPlayer: room.currentPlayer, gameOver: room.gameOver });
+                broadcastGameEvent(room, ws, { type: 'move', roomId: room.roomId, move: p.move, currentPlayer: room.currentPlayer, gameOver: room.gameOver });
             }
             if (p.type === 'undo') {
                 if (room.gameOver) return send(ws, { type: 'error', message: '对局已结束，无法悔棋' });
@@ -388,7 +457,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 room.moveLog.pop();
                 if (room.gameId != null) store.deleteLastMove(room.gameId);
                 room.lastActive = Date.now();
-                broadcast(room, {
+                broadcastGameEvent(room, null, {
                     type: 'undo', color: my, board: room.board, currentPlayer: room.currentPlayer,
                 });
                 return;
@@ -404,13 +473,13 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
                 room.moveLog = [];
                 ensureGame(room);
                 room.lastActive = Date.now();
-                broadcastExcept(room, ws, { type: 'restart', roomId: room.roomId, board: room.board, currentPlayer: room.currentPlayer });
+                broadcastGameEvent(room, ws, { type: 'restart', roomId: room.roomId, board: room.board, currentPlayer: room.currentPlayer });
             }
             if (p.type === 'surrender') {
                 finalizeRoomGame(room, p.winnerPiece === BLACK ? 'black' : (p.winnerPiece === WHITE ? 'white' : 'black'), 'surrender');
                 room.gameOver = true;
                 room.lastActive = Date.now();
-                broadcastExcept(room, ws, { type: 'surrender', roomId: room.roomId, winnerPiece: p.winnerPiece, message: p.message || '一方认输' });
+                broadcastGameEvent(room, ws, { type: 'surrender', roomId: room.roomId, winnerPiece: p.winnerPiece, message: p.message || '一方认输' });
             }
         });
 
@@ -431,7 +500,7 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
             }
             // 仍有对手在场：不结束对局（不落 abandoned），等其重连继续
             broadcast(room, { type: 'peer-left', roomId: room.roomId });
-            broadcast(room, { type: 'room-update', roomId: room.roomId, players: room.clients.size });
+            broadcast(room, { type: 'room-update', roomId: room.roomId, players: seatClients(room).length, spectators: spectatorClients(room).length });
         });
     });
 
@@ -448,10 +517,11 @@ function createApp({ store, staticDir, heartbeatMs = 30000, roomKeepMs = 300000,
             const now = Date.now();
             for (const room of rooms.values()) {
                 if (room.clients.size === 0) continue; // 由保留期逻辑处理
-                const inProgress = room.gameId != null && !room.gameOver && room.clients.size >= 2;
+                const inProgress = room.gameId != null && !room.gameOver && seatClients(room).length >= 2;
                 if (inProgress) continue; // 对弈中的房间不清理（允许长考）
-                if (now - (room.lastActive || now) <= roomIdleMs) continue;
-                wsLog.log('room-idle-expire', { room: room.roomId, clients: room.clients.size });
+                const idle = now - (room.lastActive || now);
+                if (idle <= roomIdleMs) continue;
+                wsLog.log('room-idle-expire', { room: room.roomId, seats: seatClients(room).length, spectators: spectatorClients(room).length });
                 try {
                     room.clients.forEach((c) => send(c, { type: 'room-expired', message: '房间长时间无对局活动，已自动关闭' }));
                 } catch (e) {}

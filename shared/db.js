@@ -24,6 +24,26 @@ function randomToken() {
     return crypto.randomBytes(24).toString('hex');
 }
 
+// 简单迁移：为 players 补充段位/战绩/管理员列（老库平滑升级）
+function migratePlayers(db) {
+    const cols = db.prepare('PRAGMA table_info(players)').all().map((c) => c.name);
+    const add = (name, ddl) => {
+        if (!cols.includes(name)) db.exec('ALTER TABLE players ADD COLUMN ' + ddl);
+    };
+    add('rating', 'rating INTEGER NOT NULL DEFAULT 1200');
+    add('games_played', 'games_played INTEGER NOT NULL DEFAULT 0');
+    add('wins', 'wins INTEGER NOT NULL DEFAULT 0');
+    add('losses', 'losses INTEGER NOT NULL DEFAULT 0');
+    add('draws', 'draws INTEGER NOT NULL DEFAULT 0');
+    add('is_admin', 'is_admin INTEGER NOT NULL DEFAULT 0');
+}
+
+// Elo：K=32，最低 100 分
+function eloNew(rating, opponent, score) {
+    const expected = 1 / (1 + Math.pow(10, (opponent - rating) / 400));
+    return Math.max(100, Math.round(rating + 32 * (score - expected)));
+}
+
 function openDb(filePath) {
     if (filePath !== ':memory:') {
         fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -70,6 +90,7 @@ function openDb(filePath) {
         CREATE INDEX IF NOT EXISTS idx_games_started ON games(started_at DESC);
         CREATE INDEX IF NOT EXISTS idx_moves_game ON moves(game_id, seq);
     `);
+    migratePlayers(db);
 
     const store = {
         _db: db,
@@ -153,6 +174,36 @@ function openDb(filePath) {
             db.prepare(
                 `UPDATE games SET result=?, reason=?, ended_at=datetime('now') WHERE id=?`
             ).run(result, reason, gameId);
+            // Elo 结算（仅双方皆为账号的有效对局）
+            if (result === 'black' || result === 'white') this.applyElo(gameId, result);
+        },
+        applyElo(gameId, winner) {
+            const g = this.getGame(gameId);
+            if (!g || !g.black_player || !g.white_player) return;
+            const b = db.prepare('SELECT * FROM players WHERE id = ?').get(g.black_player);
+            const w = db.prepare('SELECT * FROM players WHERE id = ?').get(g.white_player);
+            if (!b || !w || b.kind !== 'account' || w.kind !== 'account') return; // 游客不参与段位
+            const bWon = winner === 'black';
+            const nb = eloNew(b.rating, w.rating, bWon ? 1 : 0);
+            const nw = eloNew(w.rating, b.rating, bWon ? 0 : 1);
+            const up = db.prepare(
+                `UPDATE players SET rating=?, games_played=games_played+1,
+                 wins=wins+?, losses=losses+?, updated_at=datetime('now') WHERE id=?`
+            );
+            db.transaction(() => {
+                up.run(nb, bWon ? 1 : 0, bWon ? 0 : 1, b.id);
+                up.run(nw, bWon ? 0 : 1, bWon ? 1 : 0, w.id);
+            })();
+        },
+        getPlayer(id) {
+            return db.prepare('SELECT * FROM players WHERE id = ?').get(id) || null;
+        },
+        leaderboard(limit = 20) {
+            return db.prepare(
+                `SELECT id, username, nick, rating, games_played, wins, losses, draws
+                 FROM players WHERE kind='account' AND games_played > 0
+                 ORDER BY rating DESC, wins DESC LIMIT ?`
+            ).all(limit);
         },
         listGames(limit = 50) {
             return db.prepare(
