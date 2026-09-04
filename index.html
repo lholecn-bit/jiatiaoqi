@@ -746,28 +746,19 @@
         }
 
         /* ===== 品字布局：标题在上，棋盘左 / 三个独立卡片右，整体等高 ===== */
-        /* 上口：标题块，与下方两列同宽 */
+        /* 上口：朴素居中的标题区（无卡片底） */
         .site-head {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             width: 100%;
             max-width: 1160px;
             box-sizing: border-box;
             margin: 0 auto;
-            padding: 12px 16px 10px;
-            border-radius: 22px;
-            border: 1px solid rgba(255, 255, 255, 0.09);
-            background: rgba(255, 255, 255, 0.035);
-            backdrop-filter: blur(6px);
+            padding: 4px 16px 0;
         }
         .site-head h1 { margin: 0; }
-        .site-head #subtitle { margin: 6px 0 2px; }
-        [data-theme="light"] .site-head {
-            border-color: rgba(140, 110, 60, 0.18);
-            background: rgba(255, 255, 255, 0.5);
-        }
+        .site-head #subtitle { margin: 6px 0 0; }
         .game-layout {
             display: flex;
             flex-direction: column;
