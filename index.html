@@ -151,6 +151,8 @@
             display: flex;
             gap: 2px;
             padding: 4px;
+            width: 100%;
+            box-sizing: border-box;
             margin-bottom: 14px;
             border-radius: 999px;
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -160,11 +162,14 @@
             border: 0;
             background: transparent;
             color: #97a0b4;
-            padding: 8px 20px;
+            flex: 1 1 0;
+            min-width: 0;
+            padding: 8px 4px;
             border-radius: 999px;
             font-size: 14px;
             font-family: inherit;
             cursor: pointer;
+            white-space: nowrap;   /* 按钮文字禁止折行，避免出现“三字一行+单字”的难看换行 */
             transition: color 0.2s, background 0.2s, box-shadow 0.2s;
         }
         .mode-btn:hover { color: #eef1f8; }
