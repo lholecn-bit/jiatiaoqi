@@ -294,6 +294,14 @@ async function main() {
             );
             assert.ok(hasGreen, '走子演示应画出绿色目标圆圈');
 
+            // 迷你棋盘应画出横/竖/斜连线（帮助理解“棋子沿线走”）：取无棋子线段中点应有半透明棕线像素
+            const lineOk = await cdp.evalJS(
+                '(()=>{const c=document.getElementById("tutCanvas").getContext("2d");' +
+                'const on=c.getImageData(62+36,17+96,1,1).data;const off=c.getImageData(62+36,17+90,1,1).data;' +
+                'const s=(d)=>d[0]+d[1]+d[2];return on[3]>0&&s(on)>s(off)+80;})()'
+            );
+            assert.ok(lineOk, '迷你棋盘应绘制连线网格');
+
             // 夹演示：两轮循环，第一轮中间白被夹黑，第二轮开始时中间必须重置回白子，全程无重复坐标
             await clickById(cdp, 'tutNextBtn');   // 3 夹
             assert.ok((await cdp.evalJS(`document.getElementById('tutTitle').textContent`)).includes('夹'));
