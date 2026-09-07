@@ -986,6 +986,19 @@
         [data-theme="light"] .room-row .rr-main { color: #3c3426; }
         [data-theme="light"] .btn-mini.ghost { border-color: rgba(140, 110, 60, 0.35); color: #5a4a2e; }
 
+        .tut-demo {
+            margin: 10px 0 2px;
+            display: flex;
+            justify-content: center;
+        }
+        #tutCanvas {
+            border-radius: 12px;
+            background: linear-gradient(180deg, #f0d19a, #d9ac5e);
+            box-shadow: inset 0 0 0 1px rgba(120, 80, 25, 0.25), 0 4px 14px -4px rgba(0, 0, 0, 0.45);
+            width: 240px;
+            height: 150px;
+        }
+
         @media (prefers-reduced-motion: reduce) {
             #status::before { animation: none; }
             * { transition: none !important; animation: none !important; }
@@ -1152,6 +1165,9 @@
 <div id="tutorialOverlay" class="modal-overlay">
     <div class="modal tutorial-modal">
         <h2 id="tutTitle">玩法教程</h2>
+        <div id="tutDemo" class="tut-demo" style="display:none">
+            <canvas id="tutCanvas" width="240" height="150"></canvas>
+        </div>
         <div id="tutBody" class="tut-body"></div>
         <div class="modal-actions">
             <button id="tutPrevBtn" class="btn-plain" type="button">‹ 上一步</button>
@@ -2396,6 +2412,169 @@ const TUT_SLIDES = [
     }
 ];
 
+// ===== 教程演示动画（迷你棋盘）=====
+let tutDemoToken = 0;
+let tutB = [];
+let tutW = [];
+
+function tdCtx() {
+    return document.getElementById('tutCanvas').getContext('2d');
+}
+function tdPt(gx, gy) {
+    const c = document.getElementById('tutCanvas');
+    const C = 24, OX = (c.width - (4 * C + 20)) / 2, OY = (c.height - (4 * C + 20)) / 2;
+    return { x: OX + gx * C, y: OY + (4 - gy) * C };
+}
+function tdDraw(ctx) {
+    const c = document.getElementById('tutCanvas');
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.fillStyle = 'rgba(110, 80, 30, 0.75)';
+    for (let gx = 0; gx < 5; gx++) {
+        for (let gy = 0; gy < 5; gy++) {
+            const p = tdPt(gx, gy);
+            ctx.beginPath(); ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+    tutB.forEach(([gx, gy]) => tdPc(ctx, gx, gy, 1));
+    tutW.forEach(([gx, gy]) => tdPc(ctx, gx, gy, 2));
+}
+function tdPc(ctx, gx, gy, color) {
+    const p = tdPt(gx, gy);
+    const r = 8.5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    if (color === 1) {
+        const g = ctx.createRadialGradient(p.x - 2, p.y - 3, 1, p.x, p.y, r);
+        g.addColorStop(0, '#4c4c58'); g.addColorStop(1, '#141419');
+        ctx.fillStyle = g;
+    } else {
+        const g = ctx.createRadialGradient(p.x - 2, p.y - 3, 1, p.x, p.y, r);
+        g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#d7d0bd');
+        ctx.fillStyle = g;
+    }
+    ctx.fill();
+    ctx.strokeStyle = color === 1 ? '#000' : '#8d8678';
+    ctx.lineWidth = 1; ctx.stroke();
+}
+function tdRing(ctx, gx, gy, color) {
+    const p = tdPt(gx, gy);
+    for (let i = 0; i < 8; i++) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 8 + i * 2.2, 0, Math.PI * 2);
+        ctx.strokeStyle = color; ctx.globalAlpha = Math.max(0, 1 - i / 8);
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+}
+function tdSleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+async function tdMove(ctx, from, to, color, token) {
+    const a = tdPt(from[0], from[1]);
+    const b = tdPt(to[0], to[1]);
+    if (color === 1) tutB = tutB.filter((p) => !(p[0] === from[0] && p[1] === from[1]));
+    else tutW = tutW.filter((p) => !(p[0] === from[0] && p[1] === from[1]));
+    const steps = 12;
+    for (let i = 0; i <= steps; i++) {
+        if (token !== tutDemoToken) return;
+        const t = i / steps;
+        tdDraw(ctx);
+        const x = a.x + (b.x - a.x) * t;
+        const y = a.y + (b.y - a.y) * t;
+        ctx.beginPath(); ctx.arc(x, y, 8.5, 0, Math.PI * 2);
+        const g = color === 1
+            ? ctx.createRadialGradient(x - 2, y - 3, 1, x, y, 8.5) && (ctx.fillStyle = '#26262d')
+            : (ctx.fillStyle = '#f5f0e0');
+        if (color === 1) ctx.fillStyle = '#26262d';
+        ctx.fill(); ctx.strokeStyle = color === 1 ? '#000' : '#8d8678'; ctx.stroke();
+        await tdSleep(18);
+    }
+    if (color === 1) tutB.push(to); else tutW.push(to);
+    if (token === tutDemoToken) tdDraw(ctx);
+}
+async function tdFlashConvert(ctx, points, toColor, token) {
+    for (let k = 0; k < 3; k++) {
+        if (token !== tutDemoToken) return;
+        tdDraw(ctx);
+        ctx.fillStyle = k % 2 === 0 ? '#b9b9c0' : '#f6d88b';
+        for (const [gx, gy] of points) { const p = tdPt(gx, gy); ctx.beginPath(); ctx.arc(p.x, p.y, 8.5, 0, Math.PI * 2); ctx.fill(); }
+        await tdSleep(140);
+    }
+    if (toColor === 1) { tutW = tutW.filter((p) => !points.some((q) => q[0] === p[0] && q[1] === p[1])); tutB.push(...points); }
+    else { tutB = tutB.filter((p) => !points.some((q) => q[0] === p[0] && q[1] === p[1])); tutW.push(...points); }
+    if (token === tutDemoToken) tdDraw(ctx);
+    for (const [gx, gy] of points) {
+        const p = tdPt(gx, gy);
+        tdRing(ctx, gx, gy, 'rgba(240,200,90,0.9)');
+    }
+}
+async function startTutDemo(index) {
+    tutDemoToken++;
+    const token = tutDemoToken;
+    const wrap = document.getElementById('tutDemo');
+    if (![1, 2, 3, 4, 5].includes(index)) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'flex';
+    const ctx = tdCtx();
+    tutB = []; tutW = [];
+    if (index === 1) { // 认识棋盘：初始布局 + 呼吸提示
+        for (let x = 0; x < 5; x++) { tutB.push([x, 0]); tutW.push([x, 4]); }
+        tdDraw(ctx);
+        for (let i = 0; i < 4; i++) {
+            if (token !== tutDemoToken) return;
+            for (const c of tutB) { const p = tdPt(c[0], c[1]); ctx.strokeStyle = i % 2 === 0 ? 'rgba(255,220,120,0.9)' : 'rgba(0,0,0,0)'; ctx.beginPath(); ctx.arc(p.x, p.y, 11, 0, Math.PI * 2); ctx.lineWidth = 2; ctx.stroke(); }
+            for (const c of tutW) { const p = tdPt(c[0], c[1]); ctx.strokeStyle = i % 2 === 0 ? 'rgba(120,180,255,0.9)' : 'rgba(0,0,0,0)'; ctx.beginPath(); ctx.arc(p.x, p.y, 11, 0, Math.PI * 2); ctx.lineWidth = 2; ctx.stroke(); }
+            await tdSleep(500);
+        }
+        return;
+    }
+    if (index === 2) { // 走子：沿横线滑动
+        tutB.push([1, 1]);
+        tdDraw(ctx);
+        for (let i = 0; i < 2; i++) { if (token !== tutDemoToken) return; await tdMove(ctx, [1, 1], [3, 1], 1, token); await tdSleep(350); await tdMove(ctx, [3, 1], [1, 1], 1, token); await tdSleep(350); }
+        return;
+    }
+    if (index === 3) { // 夹：己-敌-己，吃掉中间
+        tutB.push([0, 1]); tutW.push([1, 1]); tutB.push([4, 1]);
+        tdDraw(ctx);
+        for (let i = 0; i < 2; i++) { if (token !== tutDemoToken) return; await tdMove(ctx, [4, 1], [2, 1], 1, token); await tdSleep(200); await tdFlashConvert(ctx, [[1, 1]], 1, token); await tdSleep(600); tutB = tutB.filter((p) => !(p[0] === 2 && p[1] === 1)); await tdMove(ctx, [2, 1], [4, 1], 1, token); await tdSleep(500); tutB.push([2, 1]); }
+        tutB = tutB.filter((p) => !(p[0] === 2 && p[1] === 1));
+        if (token === tutDemoToken) tdDraw(ctx);
+        return;
+    }
+    if (index === 4) { // 挑：敌-己-敌
+        tutW.push([0, 1]); tutW.push([2, 1]); tutB.push([1, 3]);
+        tdDraw(ctx);
+        for (let i = 0; i < 2; i++) {
+            if (token !== tutDemoToken) return;
+            await tdMove(ctx, [1, 3], [1, 1], 1, token);
+            await tdFlashConvert(ctx, [[0, 1], [2, 1]], 1, token);
+            await tdSleep(600);
+            tutB = tutB.filter((p) => !(p[0] === 1 && p[1] === 1));
+            tutW.push([0, 1], [2, 1]);
+            await tdMove(ctx, [1, 1], [1, 3], 1, token);
+            await tdSleep(500);
+        }
+        tutB = tutB.filter((p) => !(p[0] === 1 && p[1] === 1));
+        if (token === tutDemoToken) tdDraw(ctx);
+        return;
+    }
+    if (index === 5) { // 连锁：先夹后自然连锁第二波
+        tutB.push([0, 1]); tutW.push([1, 1]); tutB.push([4, 1]); tutB.push([1, 3]); tutW.push([1, 2]);
+        tdDraw(ctx);
+        for (let i = 0; i < 2; i++) {
+            if (token !== tutDemoToken) return;
+            await tdMove(ctx, [4, 1], [2, 1], 1, token);
+            await tdFlashConvert(ctx, [[1, 1]], 1, token);   // 第 1 波
+            await tdSleep(250);
+            await tdFlashConvert(ctx, [[1, 2]], 1, token);   // 新棋子继续夹出第 2 波
+            await tdSleep(700);
+            tutB = tutB.filter((p) => !(p[0] === 2 && p[1] === 1));
+            tutW.push([1, 2]);
+            await tdMove(ctx, [2, 1], [4, 1], 1, token);
+            await tdSleep(500);
+        }
+        tutB = tutB.filter((p) => !(p[0] === 2 && p[1] === 1));
+        if (token === tutDemoToken) tdDraw(ctx);
+        return;
+    }
+}
+
 function renderTutorial() {
     const s = TUT_SLIDES[tutIndex];
     document.getElementById('tutTitle').textContent = s.title;
@@ -2403,6 +2582,7 @@ function renderTutorial() {
     tutPrevBtnEl.disabled = tutIndex === 0;
     tutNextBtnEl.textContent = tutIndex === TUT_SLIDES.length - 1 ? '完 成' : '下一步 ›';
     tutDotsEl.innerHTML = TUT_SLIDES.map((_, i) => '<span' + (i === tutIndex ? ' class="active"' : '') + '>●</span>').join('');
+    startTutDemo(tutIndex);
 }
 
 function openTutorial() {
@@ -2412,6 +2592,7 @@ function openTutorial() {
 }
 
 function closeTutorial() {
+    tutDemoToken++;
     closeOverlay(tutorialOverlayEl);
     try { localStorage.setItem(TUT_KEY, '1'); } catch (e) {}
 }
