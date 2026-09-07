@@ -272,14 +272,60 @@ async function main() {
             assert.equal(await cdp.evalJS(`document.getElementById('whiteCount').textContent`), '5');
         });
 
-        // ---------- A6 教程：可再次进入并翻页 ----------
+        // ---------- A6 教程：可再次进入并翻页（含迷你动图断言） ----------
         step('A6 玩法教程可再次打开并翻页', async () => {
             await load(freshUrl('a6'));
             await clickById(cdp, 'tutorialBtn');
             await waitFor(cdp, `document.getElementById('tutorialOverlay').classList.contains('show')`, 5000, '教程打开');
             assert.ok((await cdp.evalJS(`document.getElementById('tutTitle').textContent`)).includes('欢迎'));
-            await clickById(cdp, 'tutNextBtn');
+            await clickById(cdp, 'tutNextBtn');   // 1 认识棋盘
             assert.ok((await cdp.evalJS(`document.getElementById('tutTitle').textContent`)).includes('棋盘'));
+            await clickById(cdp, 'tutNextBtn');   // 2 走子
+            assert.ok((await cdp.evalJS(`document.getElementById('tutTitle').textContent`)).includes('走子'));
+            assert.equal(await cdp.evalJS(`document.getElementById('tutDemo').style.display`), 'flex', '动图画布已显示');
+
+            // 走子演示：开演前应画出“选中高亮环 + 绿色目标圆圈”（同步绘制，翻到页即可见）
+            const hasGreen = await cdp.evalJS(
+                '(()=>{const c=document.getElementById("tutCanvas").getContext("2d");' +
+                'const cx=62+3*24, cy=17+(4-1)*24;let best=0;' +
+                'for(let a=0;a<360;a+=10){for(const rr of [11,12]){' +
+                'const d=c.getImageData(Math.round(cx+Math.cos(a*Math.PI/180)*rr),Math.round(cy+Math.sin(a*Math.PI/180)*rr),1,1).data;' +
+                'const gs=d[1]-(d[0]+d[2])/2;if(gs>best)best=gs;}}return best>45;})()'
+            );
+            assert.ok(hasGreen, '走子演示应画出绿色目标圆圈');
+
+            // 夹演示：两轮循环，第一轮中间白被夹黑，第二轮开始时中间必须重置回白子，全程无重复坐标
+            await clickById(cdp, 'tutNextBtn');   // 3 夹
+            assert.ok((await cdp.evalJS(`document.getElementById('tutTitle').textContent`)).includes('夹'));
+            await cdp.evalJS(
+                '(async()=>{window.__tutLog=[];const t0=Date.now();' +
+                'const dup=(a)=>{const s=new Set(a.map(p=>p[0]+","+p[1]));return s.size!==a.length;};' +
+                'while(Date.now()-t0<3600){window.__tutLog.push({t:Date.now()-t0,' +
+                'W:JSON.stringify(tutW),B:JSON.stringify(tutB),dupB:dup(tutB),dupW:dup(tutW)});' +
+                'await new Promise(r=>setTimeout(r,120));}return true;})()'
+            );
+            const log = await cdp.evalJS(`window.__tutLog`);
+            const wMid = (s) => JSON.parse(s).some((p) => p[0] === 1 && p[1] === 1);
+            assert.ok(log.some((e) => e.t > 700 && e.t < 2100 && !wMid(e.W) && wMid(e.B)), '夹：第一轮中间白被夹成黑');
+            assert.ok(log.some((e) => e.t > 2100 && wMid(e.W)), '夹：第二轮开始时中间重置回白子');
+            assert.ok(log.every((e) => !e.dupB && !e.dupW), '夹：棋子数组全程无重复坐标');
+
+            // 连锁演示：两轮循环，第二轮开始时白子 (1,1)(1,2) 都应重置回原位
+            await clickById(cdp, 'tutNextBtn');   // 4 挑
+            await clickById(cdp, 'tutNextBtn');   // 5 连锁
+            assert.ok((await cdp.evalJS(`document.getElementById('tutTitle').textContent`)).includes('连锁'));
+            await cdp.evalJS(
+                '(async()=>{window.__tutLog2=[];const t0=Date.now();' +
+                'while(Date.now()-t0<4200){window.__tutLog2.push({t:Date.now()-t0,' +
+                'W:JSON.stringify(tutW),B:JSON.stringify(tutB)});' +
+                'await new Promise(r=>setTimeout(r,120));}return true;})()'
+            );
+            const log2 = await cdp.evalJS(`window.__tutLog2`);
+            const bothW = (s) => { const a = JSON.parse(s); return a.some((p) => p[0] === 1 && p[1] === 1) && a.some((p) => p[0] === 1 && p[1] === 2); };
+            const bothB = (s) => { const a = JSON.parse(s); return a.some((p) => p[0] === 1 && p[1] === 1) && a.some((p) => p[0] === 1 && p[1] === 2); };
+            assert.ok(log2.some((e) => e.t > 1900 && e.t < 3100 && !bothW(e.W) && bothB(e.B)), '连锁：两波把白子 (1,1)(1,2) 全夹成黑');
+            assert.ok(log2.some((e) => e.t > 3000 && bothW(e.W)), '连锁：第二轮开始时两枚白子重置回原位');
+
             await clickById(cdp, 'tutSkipBtn');
         });
 
